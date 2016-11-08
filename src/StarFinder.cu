@@ -1,5 +1,6 @@
 #include "StarFinder.h"
 
+// I doubt I'm using all of these...
 #include <thrust/device_ptr.h>
 #include <thrust/device_vector.h>
 #include <thrust/copy.h>
@@ -18,6 +19,7 @@
 
 using Byte = uint8_t;
 
+// Look at zipped pixel and index, determine if pixel is nonzero
 struct IsNonzero
 {
 	IsNonzero() {}
@@ -29,8 +31,10 @@ struct IsNonzero
 	}
 };
 
+// Convert 1D pixel index to 2D pixel coordinate
 struct PixelIdxToLocation
 {
+	// We need the image step to compute this
 	int m_nStep;
 	PixelIdxToLocation( int nStep ) : m_nStep( nStep ) {}
 
@@ -43,17 +47,16 @@ struct PixelIdxToLocation
 	}
 };
 
+// Find non-zero pixel locations and return a vector of their pixel coordinates
 std::vector<std::pair<int, int>> FindStarsInImage( cv::cuda::GpuMat& dBoolImg )
 {
+	// We need a contiguous image of bytes (which we'll be treating as bools)
 	if ( dBoolImg.type() != CV_8U || dBoolImg.empty() || dBoolImg.isContinuous() == false )
 		throw std::runtime_error( "Error: Stars must be found in boolean images!" );
-	
+
 	// Construct a device vector that we can iterate over from the mat's data
 	using BytePtr = thrust::device_ptr<Byte>;
 
-	using IdxVec = thrust::device_vector<int>;
-	IdxVec dvIndices;
-	
 	// Create iterator to gives us pixel index (1-D)
 	using CountIter = thrust::counting_iterator<int>;
 	CountIter itCountBegin( 0 );
@@ -65,10 +68,12 @@ std::vector<std::pair<int, int>> FindStarsInImage( cv::cuda::GpuMat& dBoolImg )
 	PixelAndIdxIter itPixAndIdxEnd = thrust::make_zip_iterator( thrust::make_tuple( BytePtr( (Byte *) dBoolImg.dataend ), itCountEnd ) );
 
 	// Count the number of non-zero pixels (we need this so we can appropriately size dest vector)
+	using IdxVec = thrust::device_vector<int>;
+	IdxVec dvIndices;
 	size_t count = thrust::count_if( itPixAndIdxBegin, itPixAndIdxEnd, IsNonzero() );
 	dvIndices.resize( count );
 
-	// Copy 1-D indices for non-zero pixels
+	// Copy 1-D indices for non-zero pixels, discard the pixel values
 	thrust::copy_if( itPixAndIdxBegin, itPixAndIdxEnd, thrust::make_zip_iterator( thrust::make_tuple( thrust::discard_iterator<>(), dvIndices.begin() ) ), IsNonzero() );
 
 	// Transform this range into 2D coordinates
@@ -76,13 +81,14 @@ std::vector<std::pair<int, int>> FindStarsInImage( cv::cuda::GpuMat& dBoolImg )
 	CoordVec dvNonzerPixelLocations( count );
 	thrust::transform( dvIndices.begin(), dvIndices.end(), dvNonzerPixelLocations.begin(), PixelIdxToLocation( dBoolImg.step ) );
 
+	// Don't know if this is necessary
 	cudaDeviceSynchronize();
 
-	// Download to host and return
-	std::vector < thrust::pair<int, int>> vRet( dvNonzerPixelLocations.size() );
-	thrust::copy( dvNonzerPixelLocations.begin(), dvNonzerPixelLocations.end(), vRet.begin() );
-	std::vector<std::pair<int, int>> vRet2;
-	for ( thrust::pair<int, int>& p : vRet )
-		vRet2.emplace_back( p.first, p.second );
-	return vRet2;
+	// Download to host and return (need to create a better "pair" object)
+	std::vector < thrust::pair<int, int>> hvNonzerPixelLocations( dvNonzerPixelLocations.size() );
+	thrust::copy( dvNonzerPixelLocations.begin(), dvNonzerPixelLocations.end(), hvNonzerPixelLocations.begin() );
+	std::vector<std::pair<int, int>> vRet;
+	for ( thrust::pair<int, int>& p : hvNonzerPixelLocations )
+		vRet.emplace_back( p.first, p.second );
+	return vRet;
 }

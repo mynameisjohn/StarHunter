@@ -2,21 +2,9 @@
 
 #include <opencv2/opencv.hpp>
 
-void dbgImg( std::string strWindowName, cv::cuda::GpuMat& imgToDebug )
-{	
-	cv::namedWindow( strWindowName, CV_WINDOW_OPENGL );
-	cv::imshow( strWindowName, imgToDebug );
-	cv::waitKey();
-	cv::destroyWindow( strWindowName );
-}
-
-void dbgImg( std::string strWindowName, cv::Mat& imgToDebug )
-{
-	cv::namedWindow( strWindowName, CV_WINDOW_FREERATIO );
-	cv::imshow( strWindowName, imgToDebug );
-	cv::waitKey();
-	cv::destroyWindow( strWindowName );
-}
+// Two functions I use to display images, defined below
+void displayImage( std::string strWindowName, cv::Mat& img );
+void displayImage( std::string strWindowName, cv::cuda::GpuMat& img );
 
 StarFinder::StarFinder( std::string strOutSuffix ) :
 	m_uNumImagesProcessed( 0 ),
@@ -50,7 +38,7 @@ bool StarFinder::HandleImage( cv::Mat img )
 	int m_nGaussianRadius = 10;
 	int nDiameter = 2 * m_nGaussianRadius + 1;
 
-	// Create linear circle filter ("tophat filter"
+	// Create linear circle filter ("tophat filter")
 	cv::Mat h_Circle = cv::Mat::zeros( cv::Size( nDiameter, nDiameter ), CV_32F );
 	cv::circle( h_Circle, cv::Size( m_nGaussianRadius, m_nGaussianRadius ), m_nGaussianRadius, 1.f, -1 );
 	h_Circle /= cv::sum( h_Circle )[0];
@@ -134,4 +122,20 @@ bool StarFinder::HandleImage( cv::Mat img )
 	cv::imwrite( strOutputFileName, matHightlight );
 
 	return true;
+}
+
+void displayImage( std::string strWindowName, cv::cuda::GpuMat& img )
+{
+	cv::namedWindow( strWindowName, CV_WINDOW_OPENGL );
+	cv::imshow( strWindowName, img );
+	cv::waitKey();
+	cv::destroyWindow( strWindowName );
+}
+
+void displayImage( std::string strWindowName, cv::Mat& img )
+{
+	cv::namedWindow( strWindowName, CV_WINDOW_FREERATIO );
+	cv::imshow( strWindowName, img );
+	cv::waitKey();
+	cv::destroyWindow( img );
 }

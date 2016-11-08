@@ -4,7 +4,7 @@
 #include <utility>
 
 // Basic image processing class that finds
-// stars, determines their centroid, and 
+// stars, determines their centroid, and
 // dumps out an image where the stars found
 // and their centroid are highlighted
 class StarFinder : public ImageProcessor
@@ -35,4 +35,5 @@ namespace cv
 }
 
 // Takes in boolean star image and returns a vector of locations in pixels
+// Uses thrust code, defined in StarFinder.cu
 std::vector<std::pair<int, int>> FindStarsInImage( cv::cuda::GpuMat& dBoolImg );
