@@ -6,12 +6,12 @@ class FileReader : public ImageSource
 {
 	std::list<std::string> m_liFileNames;
 public:
-	FileReader( std::list<std::string> liFileNames );
+	FileReader( std::initializer_list<std::string> liFileNames );
 	bool HasImages() const override;
 	cv::Mat GetNextImage() override;
 };
 
-FileReader::FileReader( std::list<std::string> liFileNames ) :
+FileReader::FileReader( std::initializer_list<std::string> liFileNames ) :
 	m_liFileNames( liFileNames )
 {}
 
@@ -24,15 +24,15 @@ cv::Mat FileReader::GetNextImage()
 {
 	if ( !HasImages() )
 		throw std::runtime_error( "Error: FileReader has no more images!" );
-
+	
 	cv::Mat matRet = cv::imread( m_liFileNames.front() );
 	m_liFileNames.pop_front();
 
 	return matRet;
 }
-
+#include <stdio.h>
 int main(int argc, char ** argv) {
-	Engine E( ImageSource::Ptr( new FileReader( { "test.png" } ) ), ImageProcessor::Ptr( new StarFinder( "testOutput" ) ) );
+	Engine E( ImageSource::Ptr( new FileReader( { "foo223.png" } ) ), ImageProcessor::Ptr( new StarFinder_UI() ) );
 	E.Run();
 
 	return 0;

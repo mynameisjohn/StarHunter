@@ -3,36 +3,54 @@
 #include <vector>
 #include <utility>
 
-// Basic image processing class that finds
-// stars, determines their centroid, and
-// dumps out an image where the stars found
-// and their centroid are highlighted
+#include <opencv2/opencv.hpp>
+
+// Base star finder class
+// All it's for is calling findStars,
+// which performs the signal processing
+// and leaves m_dBoolImg with a byte
+// image where nonzero pixels are stars
 class StarFinder : public ImageProcessor
 {
-	// Our "work buffer" of images to process
-	std::list<cv::Mat> m_liMatsToProcess;
+protected:
+	// Processing params
+	int m_nGaussianRadius;
+	int m_nDilationRadius;
+	float m_fHWHM;
+	float m_fIntensityThreshold;
 
-	// The files we'll write to disk will have
-	// this suffix followed by their index
-	size_t m_uNumImagesProcessed;
-	std::string m_strOutputSuffix;
+	// The images we use and their size
+	cv::cuda::GpuMat m_dInputImg;
+	cv::cuda::GpuMat m_dGaussianImg;
+	cv::cuda::GpuMat m_dTopHatImg;
+	cv::cuda::GpuMat m_dPeakImg;
+	cv::cuda::GpuMat m_dThresholdImg;
+	cv::cuda::GpuMat m_dDilatedImg;
+	cv::cuda::GpuMat m_dLocalMaxImg;
+	cv::cuda::GpuMat m_dStarImg;
+	cv::cuda::GpuMat m_dBoolImg;
+	cv::cuda::GpuMat m_dTmpImg;
+
+	// Leaves bool image with star locations
+	bool findStars( cv::Mat& img );
 
 public:
 	// TODO work out some algorithm parameters,
 	// it's all hardcoded nonsense right now
-	StarFinder( std::string strOutSuffix );
+	StarFinder();
 
 	bool HandleImage( cv::Mat img ) override;
 };
 
-// Forward declare cv::cuda::GpuMat
-namespace cv
+// UI implementation - pops opencv window
+// with trackbars to control parameters and
+// see results
+class StarFinder_UI : public StarFinder
 {
-	namespace cuda
-	{
-		class GpuMat;
-	}
-}
+public:
+	StarFinder_UI();
+	bool HandleImage( cv::Mat img ) override;
+};
 
 // Takes in boolean star image and returns a vector of locations in pixels
 // Uses thrust code, defined in StarFinder.cu
