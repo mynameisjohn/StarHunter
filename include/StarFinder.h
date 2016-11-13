@@ -61,16 +61,26 @@ public:
 	bool HandleImage( cv::Mat img ) override;
 };
 
-// Implementation that performs an optical flow algorithm on input
+// Implementation that computes the average
+// drift in star positions across each
+// handled image. 
 class StarFinder_OptFlow : public StarFinder
 {
+	// The drift will be averaged when requested
+	int m_nImagesProcessed;
+	float m_fDriftX_Cumulative;
+	float m_fDriftY_Cumulative;
+
+	// The last set of stars we found
+	// We'll be looking for their match
 	std::vector<Circle> m_vLastCircles;
-	float m_fDriftX;
-	float m_fDriftY;
 public:
 	StarFinder_OptFlow();
 	bool HandleImage( cv::Mat img ) override;
+	bool GetDrift( float * pDriftX, float * pDriftY ) const;
 };
+
+
 
 // Takes in boolean star image and returns a vector of stars as circles
 std::vector<Circle> FindStarsInImage( float fStarRadius, cv::cuda::GpuMat& dBoolImg );

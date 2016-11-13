@@ -200,8 +200,9 @@ bool StarFinder_UI::HandleImage( cv::Mat img )
 
 StarFinder_OptFlow::StarFinder_OptFlow() :
 	StarFinder(),
-	m_fDriftX( 0 ),
-	m_fDriftY( 0 )
+	m_nImagesProcessed( 0 ),
+	m_fDriftX_Cumulative( 0 ),
+	m_fDriftY_Cumulative( 0 )
 {}
 
 bool StarFinder_OptFlow::HandleImage( cv::Mat img )
@@ -220,36 +221,57 @@ bool StarFinder_OptFlow::HandleImage( cv::Mat img )
 		std::vector<Circle> vStarLocations = FindStarsInImage( 10, m_dBoolImg );
 
 		// If these are sized different, we have problems
-		if ( vStarLocations.size() != m_vLastCircles.size() )
-			throw std::runtime_error( "We lost some stars" );
+		//if ( vStarLocations.size() != m_vLastCircles.size() )
+		//	throw std::runtime_error( "We lost some stars" );
 
-		for ( Circle c1 : m_vLastCircles )
+		// Compute the average drift for this set of matches
+		float fDriftAvgX = 0;
+		float fDriftAvgY = 0;
+
+		// For every circle in our last vector
+		for ( Circle cOld : m_vLastCircles )
 		{
+			// Try to find a match in this vector
 			bool bMatchFound = false;
-			for ( Circle c2 : vStarLocations )
+			for ( Circle cNew : vStarLocations )
 			{
-				float fDistX = c1.fX - c2.fX;
-				float fDistY = c1.fY - c2.fY;
+				// Compute the drift between old and new
+				float fDistX = cNew.fX - cOld.fX;
+				float fDistY = cNew.fY - cOld.fY;
 				float fDist2 = pow( fDistX, 2 ) + pow( fDistY, 2 );
-				if ( fDist2 < pow( c1.fR + c2.fR, 2 ) )
+				if ( fDist2 < pow( cOld.fR + cNew.fR, 2 ) )
 				{
+					// For now I'd like to ensure that we don't have duplicate matches
 					if ( bMatchFound )
 						throw std::runtime_error( "Error: Why were there two matches?" );
 					bMatchFound = true;
 
-					// We're adding the average drift across all stars
-					m_fDriftX += fDistX / (float) vStarLocations.size();
-					m_fDriftY += fDistY / (float) vStarLocations.size();
+					// Divide this drift by the # of stars we have to average
+					fDriftAvgX += fDistX / float( m_vLastCircles.size() );
+					fDriftAvgY += fDistY / float( m_vLastCircles.size() );
 				}
 			}
-
-			if ( bMatchFound == false )
-				throw std::runtime_error( "Error: No matches found!" );
 		}
 
-		// Update cached positions
+		// Update cached positions, inc cumulative drift counter
 		m_vLastCircles = std::move( vStarLocations );
+		m_fDriftX_Cumulative += fDriftAvgX;
+		m_fDriftY_Cumulative += fDriftAvgY;
+		m_nImagesProcessed++;
 	}
+
+	return true;
+}
+
+bool StarFinder_OptFlow::GetDrift( float * pDriftX, float * pDriftY ) const
+{
+	// Nothing to average yet
+	if ( !( m_nImagesProcessed && pDriftX && pDriftY ) )
+		return false;
+
+	// Divide cumulative drift by # of images it was computed from
+	*pDriftX = m_fDriftX_Cumulative / float( m_nImagesProcessed );
+	*pDriftY = m_fDriftY_Cumulative / float( m_nImagesProcessed );
 
 	return true;
 }
@@ -276,15 +298,16 @@ std::vector<Circle> CollapseCircles( const std::vector<Circle>& vInput )
 {
 	std::vector<Circle> vRet;
 
-	for ( const Circle c : vInput )
+	for ( const Circle cInput : vInput )
 	{
 		bool bMatchFound = false;
 		for ( Circle& cMatch : vRet )
 		{
-			float fDistX = cMatch.fX - c.fX;
-			float fDistY = cMatch.fY - c.fY;
+			// Compute distance from input to match
+			float fDistX = cMatch.fX - cInput.fX;
+			float fDistY = cMatch.fY - cInput.fY;
 			float fDist2 = pow( fDistX, 2 ) + pow( fDistY, 2 );
-			if ( fDist2 < pow( c.fR + cMatch.fR, 2 ) )
+			if ( fDist2 < pow( cInput.fR + cMatch.fR, 2 ) )
 			{
 				// Skip if they're very close
 				if ( fDist2 < kEPS )
@@ -296,19 +319,18 @@ std::vector<Circle> CollapseCircles( const std::vector<Circle>& vInput )
 				// Compute union circle
 				Circle cUnion { 0 };
 
-				// Compute unit vector between centers
+				// Compute unit vector from input to match
 				float fDist = sqrt( fDist2 );
 				float nX = fDistX / fDist;
 				float nY = fDistY / fDist;
 
 				// Find furthest points on both circles
-				float x0 = c.fX + nX * c.fR;
-				float y0 = c.fY + nY * c.fR;
-				float x1 = cMatch.fX - nX * cMatch.fR;
-				float y1 = cMatch.fY - nY * cMatch.fR;
+				float x0 = cInput.fX - nX * cInput.fR;
+				float y0 = cInput.fY - nY * cInput.fR;
+				float x1 = cMatch.fX + nX * cMatch.fR;
+				float y1 = cMatch.fY + nY * cMatch.fR;
 
-				// The distance between these points is
-				// the diameter of the union circle
+				// The distance between these points is the diameter of the union circle
 				float fUnionDiameter = sqrt( pow( x1 - x0, 2 ) + pow( y1 - y0, 2 ) );
 				cUnion.fR = fUnionDiameter / 2;
 
@@ -325,7 +347,7 @@ std::vector<Circle> CollapseCircles( const std::vector<Circle>& vInput )
 		// If no match found, store this one
 		if ( !bMatchFound )
 		{
-			vRet.push_back( c );
+			vRet.push_back( cInput );
 		}
 	}
 
