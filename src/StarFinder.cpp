@@ -2,10 +2,11 @@
 #include "FnPtrHelper.h"
 
 #include <opencv2/opencv.hpp>
-
 // Two functions I use to display images, defined below
 void displayImage( std::string strWindowName, cv::Mat& img );
 void displayImage( std::string strWindowName, cv::cuda::GpuMat& img );
+
+const double kEPS = .001;
 
 StarFinder::StarFinder() :
 	// These are some good defaults
@@ -91,12 +92,13 @@ bool StarFinder::findStars( cv::Mat& img )
 
 	// Exponentiating that image makes those zero pixels 1, and the
 	// negative pixels some low number; threshold to drop them
-	const double kEps = .001;
 	cv::cuda::exp( m_dLocalMaxImg, m_dLocalMaxImg );
-	cv::cuda::threshold( m_dLocalMaxImg, m_dStarImg, 1 - kEps, 1 + kEps, cv::THRESH_BINARY );
+	cv::cuda::threshold( m_dLocalMaxImg, m_dStarImg, 1 - kEPS, 1 + kEPS, cv::THRESH_BINARY );
 
 	// This star image is now a boolean image - convert it to bytes (TODO you should add some noise)
 	m_dStarImg.convertTo( m_dBoolImg, CV_8U, 0xff );
+
+	return true;
 }
 
 // Just find the stars
@@ -155,17 +157,18 @@ bool StarFinder_UI::HandleImage( cv::Mat img )
 			throw std::runtime_error( "Error! Why did findStars return false?" );
 
 		// Use thrust to find stars in pixel coordinates
-		std::vector<std::pair<int, int>> vStarLocations = FindStarsInImage( m_dBoolImg );
+		const float fStarRadius = 10.f;
+		std::vector<Circle> vStarLocations = FindStarsInImage( fStarRadius, m_dBoolImg );
 
 		// Create copy of original input and draw circles where stars were found
 		cv::Mat hHightlight = img.clone();
-		const int nHighlightRadius = 10, nHighlightThickness = 1;
+		const int nHighlightThickness = 1;
 		const cv::Scalar sHighlightColor( 0xde, 0xad, 0 );
-		std::cout << vStarLocations.size() << std::endl;
-		for ( const std::pair<int, int> ptStar : vStarLocations )
+		
+		for ( const Circle ptStar : vStarLocations )
 		{
 			// TODO should I be checking if we go too close to the edge?
-			cv::circle( hHightlight, cv::Point( ptStar.first, ptStar.second ), nHighlightRadius, sHighlightColor, nHighlightThickness );
+			cv::circle( hHightlight, cv::Point( ptStar.fX, ptStar.fY ), ptStar.fR, sHighlightColor, nHighlightThickness );
 		}
 
 		// Show the image with circles
@@ -195,6 +198,62 @@ bool StarFinder_UI::HandleImage( cv::Mat img )
 	return true;
 }
 
+StarFinder_OptFlow::StarFinder_OptFlow() :
+	StarFinder(),
+	m_fDriftX( 0 ),
+	m_fDriftY( 0 )
+{}
+
+bool StarFinder_OptFlow::HandleImage( cv::Mat img )
+{
+	if ( !findStars( img ) )
+		return false;
+
+	if ( m_vLastCircles.empty() )
+	{
+		// Store if not yet created
+		m_vLastCircles = FindStarsInImage( 10, m_dBoolImg );
+	}
+	else
+	{
+		// Use thrust to find stars in pixel coordinates
+		std::vector<Circle> vStarLocations = FindStarsInImage( 10, m_dBoolImg );
+
+		// If these are sized different, we have problems
+		if ( vStarLocations.size() != m_vLastCircles.size() )
+			throw std::runtime_error( "We lost some stars" );
+
+		for ( Circle c1 : m_vLastCircles )
+		{
+			bool bMatchFound = false;
+			for ( Circle c2 : vStarLocations )
+			{
+				float fDistX = c1.fX - c2.fX;
+				float fDistY = c1.fY - c2.fY;
+				float fDist2 = pow( fDistX, 2 ) + pow( fDistY, 2 );
+				if ( fDist2 < pow( c1.fR + c2.fR, 2 ) )
+				{
+					if ( bMatchFound )
+						throw std::runtime_error( "Error: Why were there two matches?" );
+					bMatchFound = true;
+
+					// We're adding the average drift across all stars
+					m_fDriftX += fDistX / (float) vStarLocations.size();
+					m_fDriftY += fDistY / (float) vStarLocations.size();
+				}
+			}
+
+			if ( bMatchFound == false )
+				throw std::runtime_error( "Error: No matches found!" );
+		}
+
+		// Update cached positions
+		m_vLastCircles = std::move( vStarLocations );
+	}
+
+	return true;
+}
+
 void displayImage( std::string strWindowName, cv::cuda::GpuMat& img )
 {
 	cv::namedWindow( strWindowName, CV_WINDOW_OPENGL );
@@ -209,4 +268,66 @@ void displayImage( std::string strWindowName, cv::Mat& img )
 	cv::imshow( strWindowName, img );
 	cv::waitKey();
 	cv::destroyWindow( strWindowName );
+}
+
+// Collapse a vector of potentiall overlapping circles
+// into a vector of non-overlapping circles
+std::vector<Circle> CollapseCircles( const std::vector<Circle>& vInput )
+{
+	std::vector<Circle> vRet;
+
+	for ( const Circle c : vInput )
+	{
+		bool bMatchFound = false;
+		for ( Circle& cMatch : vRet )
+		{
+			float fDistX = cMatch.fX - c.fX;
+			float fDistY = cMatch.fY - c.fY;
+			float fDist2 = pow( fDistX, 2 ) + pow( fDistY, 2 );
+			if ( fDist2 < pow( c.fR + cMatch.fR, 2 ) )
+			{
+				// Skip if they're very close
+				if ( fDist2 < kEPS )
+				{
+					bMatchFound = true;
+					continue;
+				}
+
+				// Compute union circle
+				Circle cUnion { 0 };
+
+				// Compute unit vector between centers
+				float fDist = sqrt( fDist2 );
+				float nX = fDistX / fDist;
+				float nY = fDistY / fDist;
+
+				// Find furthest points on both circles
+				float x0 = c.fX + nX * c.fR;
+				float y0 = c.fY + nY * c.fR;
+				float x1 = cMatch.fX - nX * cMatch.fR;
+				float y1 = cMatch.fY - nY * cMatch.fR;
+
+				// The distance between these points is
+				// the diameter of the union circle
+				float fUnionDiameter = sqrt( pow( x1 - x0, 2 ) + pow( y1 - y0, 2 ) );
+				cUnion.fR = fUnionDiameter / 2;
+
+				// And the center is the midpoint between the furthest points
+				cUnion.fX = ( x0 + x1 ) / 2;
+				cUnion.fY = ( y0 + y1 ) / 2;
+
+				// Replace this circle with the union circle
+				cMatch = cUnion;
+				bMatchFound = true;
+			}
+		}
+
+		// If no match found, store this one
+		if ( !bMatchFound )
+		{
+			vRet.push_back( c );
+		}
+	}
+
+	return vRet;
 }

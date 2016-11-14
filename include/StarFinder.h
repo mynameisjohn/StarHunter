@@ -5,6 +5,15 @@
 
 #include <opencv2/opencv.hpp>
 
+
+// Circle struct
+struct Circle
+{
+	float fX;	// x pos
+	float fY;	// y pos
+	float fR;	// radius
+};
+
 // Base star finder class
 // All it's for is calling findStars,
 // which performs the signal processing
@@ -52,6 +61,17 @@ public:
 	bool HandleImage( cv::Mat img ) override;
 };
 
-// Takes in boolean star image and returns a vector of locations in pixels
-// Uses thrust code, defined in StarFinder.cu
-std::vector<std::pair<int, int>> FindStarsInImage( cv::cuda::GpuMat& dBoolImg );
+// Implementation that performs an optical flow algorithm on input
+class StarFinder_OptFlow : public StarFinder
+{
+	std::vector<Circle> m_vLastCircles;
+	float m_fDriftX;
+	float m_fDriftY;
+public:
+	StarFinder_OptFlow();
+	bool HandleImage( cv::Mat img ) override;
+};
+
+// Takes in boolean star image and returns a vector of stars as circles
+std::vector<Circle> FindStarsInImage( float fStarRadius, cv::cuda::GpuMat& dBoolImg );
+std::vector<Circle> CollapseCircles( const std::vector<Circle>& vInput );

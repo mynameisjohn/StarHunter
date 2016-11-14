@@ -36,7 +36,7 @@ if(WIN32)
     ${OCV_LIB_DIR}/opencv_cudaimgproc${OCV_LIB_SUFFIX}
     ${OCV_LIB_DIR}/opencv_cudaarithm${OCV_LIB_SUFFIX}
     ${OCV_LIB_DIR}/opencv_cudafilters${OCV_LIB_SUFFIX}
-    ${OCV_LIB_DIR}/opencv_cudev${OCV_LIB_SUFFIX}
+	${OCV_LIB_DIR}/opencv_cudaoptflow${OCV_LIB_SUFFIX}
     ${LIBRAW_LIB_DIR}/${LIBTYPE}/LibRaw.lib
     ${EDSDK_LIB_DIR}/EDSDK.lib)
 endif(WIN32)

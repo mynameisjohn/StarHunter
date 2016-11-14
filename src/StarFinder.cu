@@ -31,24 +31,25 @@ struct IsNonzero
 	}
 };
 
-// Convert 1D pixel index to 2D pixel coordinate
-struct PixelIdxToLocation
+// Convert 1-d pixel to star circle with radius
+struct PixelToStarCircle
 {
 	// We need the image step to compute this
+	float m_fRadius;
 	int m_nStep;
-	PixelIdxToLocation( int nStep ) : m_nStep( nStep ) {}
+	PixelToStarCircle( float fRadius, int nStep ) : m_fRadius( fRadius ), m_nStep( nStep ) {}
 
 	__host__ __device__
-	thrust::pair<int, int> operator()( const int idx )
+	Circle operator()( const int idx )
 	{
 		int x = idx % m_nStep;
 		int y = idx / m_nStep;
-		return thrust::make_pair( x, y );
+		return { (float) x, (float) y, m_fRadius };
 	}
 };
 
 // Find non-zero pixel locations and return a vector of their pixel coordinates
-std::vector<std::pair<int, int>> FindStarsInImage( cv::cuda::GpuMat& dBoolImg )
+std::vector<Circle> FindStarsInImage( float fStarRadius, cv::cuda::GpuMat& dBoolImg )
 {
 	// We need a contiguous image of bytes (which we'll be treating as bools)
 	if ( dBoolImg.type() != CV_8U || dBoolImg.empty() || dBoolImg.isContinuous() == false )
@@ -76,19 +77,21 @@ std::vector<std::pair<int, int>> FindStarsInImage( cv::cuda::GpuMat& dBoolImg )
 	// Copy 1-D indices for non-zero pixels, discard the pixel values
 	thrust::copy_if( itPixAndIdxBegin, itPixAndIdxEnd, thrust::make_zip_iterator( thrust::make_tuple( thrust::discard_iterator<>(), dvIndices.begin() ) ), IsNonzero() );
 
-	// Transform this range into 2D coordinates
-	using CoordVec = thrust::device_vector<thrust::pair<int, int>>;
-	CoordVec dvNonzerPixelLocations( count );
-	thrust::transform( dvIndices.begin(), dvIndices.end(), dvNonzerPixelLocations.begin(), PixelIdxToLocation( dBoolImg.step ) );
+	// Transform this range into star circles
+	using CircleVec = thrust::device_vector<Circle>;
+	CircleVec dvStarCircles( count );
+	thrust::transform( dvIndices.begin(), dvIndices.end(), dvStarCircles.begin(), PixelToStarCircle( fStarRadius, dBoolImg.step ) );
 
 	// Don't know if this is necessary
 	cudaDeviceSynchronize();
 
-	// Download to host and return (need to create a better "pair" object)
-	std::vector < thrust::pair<int, int>> hvNonzerPixelLocations( dvNonzerPixelLocations.size() );
-	thrust::copy( dvNonzerPixelLocations.begin(), dvNonzerPixelLocations.end(), hvNonzerPixelLocations.begin() );
-	std::vector<std::pair<int, int>> vRet;
-	for ( thrust::pair<int, int>& p : hvNonzerPixelLocations )
-		vRet.emplace_back( p.first, p.second );
-	return vRet;
+	// Download to host
+	std::vector<Circle> hvStarCircles( dvStarCircles.size() );
+	thrust::copy( dvStarCircles.begin(), dvStarCircles.end(), hvStarCircles.begin() );
+
+	// Collapse
+	std::vector<Circle> vStarPos_Collapsed = CollapseCircles( hvStarCircles );
+
+	// Return collapsed star positions
+	return vStarPos_Collapsed;
 }
