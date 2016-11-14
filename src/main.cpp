@@ -30,9 +30,9 @@ cv::Mat FileReader::GetNextImage()
 
 	return matRet;
 }
-#include <stdio.h>
+
 int main(int argc, char ** argv) {
-	Engine E( ImageSource::Ptr( new FileReader( { "foo223.png", "foo223.png" } ) ), ImageProcessor::Ptr( new StarFinder_OptFlow() ) );
+	Engine E( ImageSource::Ptr( new FileReader( { "foo223.png", "foo223.png" } ) ), ImageProcessor::Ptr( new StarFinder_UI() ) );
 	E.Run();
 
 	return 0;

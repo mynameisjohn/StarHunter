@@ -329,5 +329,11 @@ std::vector<Circle> CollapseCircles( const std::vector<Circle>& vInput )
 		}
 	}
 
+	// Run it again if we are still collapsing
+	// This recursion will break when there are
+	// no more circles to collapse
+	if ( vInput.size() != vRet.size() )
+		vRet = CollapseCircles( vRet );
+
 	return vRet;
 }
