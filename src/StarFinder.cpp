@@ -2,9 +2,17 @@
 #include "FnPtrHelper.h"
 
 #include <opencv2/opencv.hpp>
-// Two functions I use to display images, defined below
+
+// Display image with opencv
 void displayImage( std::string strWindowName, cv::Mat& img );
+#if SH_CUDA
 void displayImage( std::string strWindowName, cv::cuda::GpuMat& img );
+#endif
+
+// Filtering functions, defined below
+void DoGaussianFilter( const int nFilterRadius, const double dSigma, img_t& input, img_t& output );
+void DoTophatFilter( const int nFilterRadius, img_t& input, img_t& output );
+void DoDilationFilter( const int nFilterRadius, img_t& input, img_t& output );
 
 const double kEPS = .001;
 
@@ -29,48 +37,40 @@ bool StarFinder::findStars( cv::Mat& img )
 	if ( m_dInputImg.empty() )
 	{
 		// Preallocate the GPU mats needed during computation
-		m_dInputImg = cv::cuda::GpuMat( img.size(), img.type() );
-		m_dGaussianImg = cv::cuda::GpuMat( img.size(), CV_32F );
-		m_dTopHatImg = cv::cuda::GpuMat( img.size(), CV_32F );
-		m_dPeakImg = cv::cuda::GpuMat( img.size(), CV_32F );
-		m_dThresholdImg = cv::cuda::GpuMat( img.size(), CV_32F );
-		m_dDilatedImg = cv::cuda::GpuMat( img.size(), CV_32F );
-		m_dLocalMaxImg = cv::cuda::GpuMat( img.size(), CV_32F );
-		m_dStarImg = cv::cuda::GpuMat( img.size(), CV_32F );
+		m_dInputImg = img_t( img.size(), img.type() );
+		m_dGaussianImg = img_t( img.size(), CV_32F );
+		m_dTopHatImg = img_t( img.size(), CV_32F );
+		m_dPeakImg = img_t( img.size(), CV_32F );
+		m_dThresholdImg = img_t( img.size(), CV_32F );
+		m_dDilatedImg = img_t( img.size(), CV_32F );
+		m_dLocalMaxImg = img_t( img.size(), CV_32F );
+		m_dStarImg = img_t( img.size(), CV_32F );
+
+        // We need a contiguous boolean image for CUDA
+#if SH_CUDA
 		m_dBoolImg = cv::cuda::createContinuous( img.size(), CV_8U );
+#else
+        m_dBoolImg = img_t( img.size(), CV_8U );
+#endif
 	}
 
-	// Upload input to GPU
+	// Upload input to GPU for CUDA
+#if SH_CUDA
 	m_dInputImg.upload( img );
+#else
+    m_dInputImg = img.clone();
+#endif
 
 	// Convert to greyscale float (using temp image)
 	cv::cuda::cvtColor( m_dInputImg, m_dTmpImg, CV_RGB2GRAY );
 	m_dTmpImg.convertTo( m_dInputImg, CV_32F, 1.f / 0xff );
 
-	// Use guassian filter to remove noise
-	int nDiameter = 2 * m_nGaussianRadius + 1;
-
-	// Create linear circle filter ("tophat filter")
-	cv::Mat h_Circle = cv::Mat::zeros( cv::Size( nDiameter, nDiameter ), CV_32F );
-	cv::circle( h_Circle, cv::Size( m_nGaussianRadius, m_nGaussianRadius ), m_nGaussianRadius, 1.f, -1 );
-	h_Circle /= cv::sum( h_Circle )[0];
-	cv::Ptr<cv::cuda::Filter> m_pLinCircFilter = cv::cuda::createLinearFilter( CV_32F, CV_32F, h_Circle );
-
-	// Create gaussian filter
-	const cv::Size szFilterDiameter( nDiameter, nDiameter );
-	const double dSigma = m_fHWHM / ( ( sqrt( 2 * log( 2 ) ) ) );
-	cv::Ptr<cv::cuda::Filter> m_pGaussFilter = cv::cuda::createGaussianFilter( CV_32F, CV_32F, szFilterDiameter, dSigma );
-
-	// Create the dilation kernel
-	int nDilationDiameter = 2 * m_nDilationRadius + 1;
-	cv::Mat hDilationStructuringElement = cv::getStructuringElement( cv::MORPH_ELLIPSE, cv::Size( nDilationDiameter, nDilationDiameter ) );
-	cv::Ptr<cv::cuda::Filter> m_pDilation = cv::cuda::createMorphologyFilter( cv::MORPH_DILATE, CV_32F, hDilationStructuringElement );
-
 	// Apply gaussian filter to input to remove high frequency noise
-	m_pGaussFilter->apply( m_dInputImg, m_dGaussianImg );
+    const double dSigma = m_fHWHM / ( ( sqrt( 2 * log( 2 ) ) ) );
+    DoGaussianFilter( m_nGaussianRadius, dSigma, m_dInputImg, m_dGaussianImg );
 
 	// Apply linear filter to input to magnify high frequency noise
-	m_pLinCircFilter->apply( m_dInputImg, m_dTopHatImg );
+    DoTophatFilter( m_nGaussianRadius, m_dInputImg, m_dTopHatImg );
 
 	// Subtract linear filtered image from gaussian image to clean area around peak
 	// Noisy areas around the peak will be negative, so threshold negative values to zero
@@ -83,7 +83,7 @@ bool StarFinder::findStars( cv::Mat& img )
 
 	// Create the dilated image (initialize its pixels to m_fIntensityThreshold)
 	m_dDilatedImg.setTo( cv::Scalar( m_fIntensityThreshold ) );
-	m_pDilation->apply( m_dThresholdImg, m_dDilatedImg );
+    DoDilationFilter( m_nDilationRadius, m_dThresholdImg, m_dDilatedImg );
 
 	// Subtract the dilated image from the gaussian peak image
 	// What this leaves us with is an image where the brightest
@@ -161,19 +161,19 @@ bool StarFinder_UI::HandleImage( cv::Mat img )
 		std::vector<Circle> vStarLocations = FindStarsInImage( fStarRadius, m_dBoolImg );
 
 		// Create copy of original input and draw circles where stars were found
-		cv::Mat hHightlight = img.clone();
+		cv::Mat hHighlight = img.clone();
 		const int nHighlightThickness = 1;
 		const cv::Scalar sHighlightColor( 0xde, 0xad, 0 );
 		
 		for ( const Circle ptStar : vStarLocations )
 		{
 			// TODO should I be checking if we go too close to the edge?
-			cv::circle( hHightlight, cv::Point( ptStar.fX, ptStar.fY ), ptStar.fR, sHighlightColor, nHighlightThickness );
+			cv::circle( hHighlight, cv::Point( ptStar.fX, ptStar.fY ), ptStar.fR, sHighlightColor, nHighlightThickness );
 		}
 
 		// Show the image with circles
-		cv::resizeWindow( strWindowName, hHightlight.size().width, hHightlight.size().height );
-		cv::imshow( strWindowName, hHightlight );
+		cv::resizeWindow( strWindowName, hHighlight.size().width, hHighlight.size().height );
+		cv::imshow( strWindowName, hHighlight );
 	};
 
 	// Create trackbars
@@ -276,14 +276,6 @@ bool StarFinder_OptFlow::GetDrift( float * pDriftX, float * pDriftY ) const
 	return true;
 }
 
-void displayImage( std::string strWindowName, cv::cuda::GpuMat& img )
-{
-	cv::namedWindow( strWindowName, CV_WINDOW_OPENGL );
-	cv::imshow( strWindowName, img );
-	cv::waitKey();
-	cv::destroyWindow( strWindowName );
-}
-
 void displayImage( std::string strWindowName, cv::Mat& img )
 {
 	cv::namedWindow( strWindowName, CV_WINDOW_FREERATIO );
@@ -291,6 +283,45 @@ void displayImage( std::string strWindowName, cv::Mat& img )
 	cv::waitKey();
 	cv::destroyWindow( strWindowName );
 }
+
+#if SH_CUDA
+void displayImage( std::string strWindowName, cv::cuda::GpuMat& img )
+{
+    cv::namedWindow( strWindowName, CV_WINDOW_OPENGL );
+    cv::imshow( strWindowName, img );
+    cv::waitKey();
+    cv::destroyWindow( strWindowName );
+}
+
+void DoTophatFilter( const int nFilterRadius, img_t& input, img_t& output )
+{
+    int nDiameter = 2 * nFilterRadius + 1;
+    cv::Mat h_Circle = cv::Mat::zeros( cv::Size( nDiameter, nDiameter ), CV_32F );
+    cv::circle( h_Circle, cv::Size( nFilterRadius, nFilterRadius ), nFilterRadius, 1.f, -1 );
+    h_Circle /= cv::sum( h_Circle )[0];
+    cv::Ptr<cv::cuda::Filter> pLinCircFilter = cv::cuda::createLinearFilter( CV_32F, CV_32F, h_Circle );
+    pLinCircFilter->apply( input, output );
+}
+
+void DoGaussianFilter( const int nFilterRadius, const double dSigma, img_t& input, img_t& output )
+{
+    int nDiameter = 2 * nFilterRadius + 1;
+    const cv::Size szFilterDiameter( nDiameter, nDiameter );
+    cv::Ptr<cv::cuda::Filter> pGaussFilter = cv::cuda::createGaussianFilter( CV_32F, CV_32F, szFilterDiameter, dSigma );
+    pGaussFilter->apply( input, output );
+}
+
+void DoDilationFilter( const int nFilterRadius, img_t& input, img_t& output )
+{
+    int nDilationDiameter = 2 * nFilterRadius + 1;
+    cv::Mat hDilationStructuringElement = cv::getStructuringElement( cv::MORPH_ELLIPSE, cv::Size( nDilationDiameter, nDilationDiameter ) );
+    cv::Ptr<cv::cuda::Filter> pDilation = cv::cuda::createMorphologyFilter( cv::MORPH_DILATE, CV_32F, hDilationStructuringElement );
+    pDilation->apply( input, output );
+}
+
+#else
+
+#endif
 
 // Collapse a vector of potentiall overlapping circles
 // into a vector of non-overlapping circles

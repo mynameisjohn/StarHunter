@@ -5,8 +5,16 @@
 
 #include <opencv2/opencv.hpp>
 
+// Useful typedefs
+#if SH_CUDA
+using img_t = cv::cuda::GpuMat;
+#else
+using img_t = cv::Mat;
+#endif
 
-// Circle struct
+// Circle struct - made my
+// own so it can be constructed
+// in host and device code
 struct Circle
 {
 	float fX;	// x pos
@@ -29,16 +37,16 @@ protected:
 	float m_fIntensityThreshold;
 
 	// The images we use and their size
-	cv::cuda::GpuMat m_dInputImg;
-	cv::cuda::GpuMat m_dGaussianImg;
-	cv::cuda::GpuMat m_dTopHatImg;
-	cv::cuda::GpuMat m_dPeakImg;
-	cv::cuda::GpuMat m_dThresholdImg;
-	cv::cuda::GpuMat m_dDilatedImg;
-	cv::cuda::GpuMat m_dLocalMaxImg;
-	cv::cuda::GpuMat m_dStarImg;
-	cv::cuda::GpuMat m_dBoolImg;
-	cv::cuda::GpuMat m_dTmpImg;
+	img_t m_dInputImg;
+	img_t m_dGaussianImg;
+	img_t m_dTopHatImg;
+	img_t m_dPeakImg;
+	img_t m_dThresholdImg;
+	img_t m_dDilatedImg;
+	img_t m_dLocalMaxImg;
+	img_t m_dStarImg;
+	img_t m_dBoolImg;
+	img_t m_dTmpImg;
 
 	// Leaves bool image with star locations
 	bool findStars( cv::Mat& img );
@@ -80,8 +88,8 @@ public:
 	bool GetDrift( float * pDriftX, float * pDriftY ) const;
 };
 
-
+// Finds overlapping circles and combines them
+std::vector<Circle> CollapseCircles( const std::vector<Circle>& vInput );
 
 // Takes in boolean star image and returns a vector of stars as circles
-std::vector<Circle> FindStarsInImage( float fStarRadius, cv::cuda::GpuMat& dBoolImg );
-std::vector<Circle> CollapseCircles( const std::vector<Circle>& vInput );
+std::vector<Circle> FindStarsInImage( float fStarRadius, img_t& dBoolImg );

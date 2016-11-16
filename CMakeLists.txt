@@ -1,64 +1,99 @@
-cmake_minimum_required(VERSION 2.8)
+CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
 
-project(StarHunter)
+PROJECT(StarHunter)
 
-set(CMAKE_CXX_FLAGS "-std=c++11 -Wall")
+SET(CMAKE_CXX_FLAGS "-std=c++11 -Wall")
 
-if(WIN32)
-  # CUDA requirse x64 on Windows
-  set(WIN_PLATFORM "x64")
+# Define build type as debug if not defined
+IF(NOT ${CMAKE_BUILD_TYPE})
+    SET(CMAKE_BUILD_TYPE "Debug")
+ENDIF(NOT ${CMAKE_BUILD_TYPE})
 
-  # OCV 3.1, handle debug and release
-  set(OCV_INC_DIR $ENV{LIBDIR}/OpenCV/31/include)
-  set(OCV_LIB_DIR $ENV{LIBDIR}/OpenCV/31/lib/${WIN_PLATFORM})
-  if (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-    set(LIBTYPE "Debug")
-    set(OCV_LIB_SUFFIX "310d.lib")
-  else (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-    set(OCV_LIB_SUFFIX "310.lib")
-    set(LIBTYPE "Release")
-  endif (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+# Windows build settings
+IF(WIN32)
+    # CUDA requires x64 on Windows
+    IF(SH_CUDA)
+        ADD_DEFINITIONS(-DSH_CUDA=1)
+        SET(WIN_PLATFORM "x64")
+    ELSE(SH_CUDA)
+        SET(WIN_PLATFORM "Win32")
+    ENDIF(SH_CUDA)
 
-  # LibRaw
-  set(LIBRAW_INC_DIR $ENV{LIBDIR}/LibRaw/include)
-  set(LIBRAW_LIB_DIR $ENV{LIBDIR}/LibRaw/lib/${WIN_PLATFORM})
+    # OCV 3.1, handle debug and release
+    SET(OCV_INC_DIR $ENV{LIBDIR}/OpenCV/31/include)
+    SET(OCV_LIB_DIR $ENV{LIBDIR}/OpenCV/31/lib/${WIN_PLATFORM})
+    IF (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    SET(LIBTYPE "Debug")
+    SET(OCV_LIB_SUFFIX "310d.lib")
+    ELSE (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+    SET(OCV_LIB_SUFFIX "310.lib")
+    SET(LIBTYPE "Release")
+    ENDIF (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
 
-  # Canon EDSDK (no libgphoto2 on Windows)
-  set(EDSDK_INC_DIR $ENV{LIBDIR}/EDSDK/include)
-  set(EDSDK_LIB_DIR $ENV{LIBDIR}/EDSDK/lib/${WIN_PLATFORM})
+    # LibRaw
+    SET(LIBRAW_INC_DIR $ENV{LIBDIR}/LibRaw/include)
+    SET(LIBRAW_LIB_DIR $ENV{LIBDIR}/LibRaw/lib/${WIN_PLATFORM})
 
-  # All libraries in one macro
-  set(SH_LIBS
-    ${OCV_LIB_DIR}/opencv_core${OCV_LIB_SUFFIX}
-    ${OCV_LIB_DIR}/opencv_imgproc${OCV_LIB_SUFFIX}
-    ${OCV_LIB_DIR}/opencv_imgcodecs${OCV_LIB_SUFFIX}
-    ${OCV_LIB_DIR}/opencv_highgui${OCV_LIB_SUFFIX}
-    ${OCV_LIB_DIR}/opencv_cudaimgproc${OCV_LIB_SUFFIX}
-    ${OCV_LIB_DIR}/opencv_cudaarithm${OCV_LIB_SUFFIX}
-    ${OCV_LIB_DIR}/opencv_cudafilters${OCV_LIB_SUFFIX}
-	${OCV_LIB_DIR}/opencv_cudaoptflow${OCV_LIB_SUFFIX}
-    ${LIBRAW_LIB_DIR}/${LIBTYPE}/LibRaw.lib
-    ${EDSDK_LIB_DIR}/EDSDK.lib)
-endif(WIN32)
+    # Canon EDSDK (no libgphoto2 on Windows)
+    SET(EDSDK_INC_DIR $ENV{LIBDIR}/EDSDK/include)
+    SET(EDSDK_LIB_DIR $ENV{LIBDIR}/EDSDK/lib/${WIN_PLATFORM})
 
-# let CMake find CUDA
-find_package(CUDA REQUIRED)
+    # All libraries in one macro
+    SET(SH_LIBS
+        # OpenCV libs
+        ${OCV_LIB_DIR}/opencv_core${OCV_LIB_SUFFIX}
+        ${OCV_LIB_DIR}/opencv_imgproc${OCV_LIB_SUFFIX}
+        ${OCV_LIB_DIR}/opencv_imgcodecs${OCV_LIB_SUFFIX}
+        ${OCV_LIB_DIR}/opencv_highgui${OCV_LIB_SUFFIX}
+        ${LIBRAW_LIB_DIR}/${LIBTYPE}/LibRaw.lib
+        ${EDSDK_LIB_DIR}/EDSDK.lib)
 
-# Set up sm arch (jetson is 32, but try 50 for now)
-set(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-arch sm_50")
+    # Append CUDA libraries if needed
+    IF(SH_CUDA)
+        SET(SH_LIBS ${SH_LIBS}
+            ${OCV_LIB_DIR}/opencv_cudaimgproc${OCV_LIB_SUFFIX}
+            ${OCV_LIB_DIR}/opencv_cudaarithm${OCV_LIB_SUFFIX}
+            ${OCV_LIB_DIR}/opencv_cudafilters${OCV_LIB_SUFFIX}
+            ${CUDA_LIBRARIES})
+    ENDIF(SH_CUDA)
+ELSE(WIN32)
+    # TODO Unix stuff
+ENDIF(WIN32)
 
-include_directories(
-  ${CMAKE_CURRENT_SOURCE_DIR}/include
-  ${OCV_INC_DIR}
-  ${LIBRAW_INC_DIR}
-  ${EDSDK_INC_DIR})
+#CUDA flags
+IF(SH_CUDA)
+    # let CMake find CUDA
+    FIND_PACKAGE(CUDA REQUIRED)
 
-  file(GLOB SOURCE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/*
+    # Set up sm arch (jetson is 32, but try 50 for now)
+    SET(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-arch sm_50")
+ENDIF(SH_CUDA)
+
+INCLUDE_DIRECTORIES(
+${CMAKE_CURRENT_SOURCE_DIR}/include
+${OCV_INC_DIR}
+${LIBRAW_INC_DIR}
+${EDSDK_INC_DIR})
+
+# Add source files (add .cu for cuda)
+IF(SH_CUDA)
+    FILE(GLOB SOURCE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cu
     ${CMAKE_CURRENT_SOURCE_DIR}/include/*)
+ELSE(SH_CUDA)
+    FILE(GLOB SOURCE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/*)
+ENDIF(SH_CUDA)
 
-# Add cuda executable
-cuda_add_executable(StarHunter ${SOURCE})
-target_link_libraries(StarHunter LINK_PUBLIC
-  ${SH_LIBS}
-  ${CUDA_LIBRARIES})
+# Add regular or cuda executable
+IF(SH_CUDA)
+    CUDA_ADD_EXECUTABLE(StarHunter ${SOURCE})
+ELSE(SH_CUDA)
+    ADD_EXECUTABLE(StarHunter ${SOURCE})
+ENDIF(SH_CUDA)
+
+# Link libraries with executable
+TARGET_LINK_LIBRARIES(StarHunter LINK_PUBLIC
+${SH_LIBS})
