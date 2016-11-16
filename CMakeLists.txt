@@ -4,11 +4,6 @@ PROJECT(StarHunter)
 
 SET(CMAKE_CXX_FLAGS "-std=c++11 -Wall")
 
-# Define build type as debug if not defined
-IF(NOT ${CMAKE_BUILD_TYPE})
-    SET(CMAKE_BUILD_TYPE "Debug")
-ENDIF(NOT ${CMAKE_BUILD_TYPE})
-
 # Windows build settings
 IF(WIN32)
     # CUDA requires x64 on Windows
@@ -23,11 +18,11 @@ IF(WIN32)
     SET(OCV_INC_DIR $ENV{LIBDIR}/OpenCV/31/include)
     SET(OCV_LIB_DIR $ENV{LIBDIR}/OpenCV/31/lib/${WIN_PLATFORM})
     IF (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-    SET(LIBTYPE "Debug")
-    SET(OCV_LIB_SUFFIX "310d.lib")
+        SET(LIBTYPE "Debug")
+        SET(OCV_LIB_SUFFIX "310d.lib")
     ELSE (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-    SET(OCV_LIB_SUFFIX "310.lib")
-    SET(LIBTYPE "Release")
+        SET(OCV_LIB_SUFFIX "310.lib")
+        SET(LIBTYPE "Release")
     ENDIF (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
 
     # LibRaw
@@ -64,9 +59,14 @@ ENDIF(WIN32)
 IF(SH_CUDA)
     # let CMake find CUDA
     FIND_PACKAGE(CUDA REQUIRED)
-
     # Set up sm arch (jetson is 32, but try 50 for now)
     SET(CUDA_NVCC_FLAGS "${CUDA_NVCC_FLAGS};-arch sm_50")
+# No CUDA? at least try to use openmp
+ELSE(SH_CUDA)
+    FIND_PACKAGE(OpenMP)
+    IF(OPENMP_FOUND)
+        SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} ${OpenMP_CXX_FLAGS}")
+    ENDIF(OPENMP_FOUND)
 ENDIF(SH_CUDA)
 
 INCLUDE_DIRECTORIES(

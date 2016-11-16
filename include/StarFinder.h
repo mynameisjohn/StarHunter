@@ -37,16 +37,16 @@ protected:
 	float m_fIntensityThreshold;
 
 	// The images we use and their size
-	img_t m_dInputImg;
-	img_t m_dGaussianImg;
-	img_t m_dTopHatImg;
-	img_t m_dPeakImg;
-	img_t m_dThresholdImg;
-	img_t m_dDilatedImg;
-	img_t m_dLocalMaxImg;
-	img_t m_dStarImg;
-	img_t m_dBoolImg;
-	img_t m_dTmpImg;
+	img_t m_imgInput;
+	img_t m_imgGaussian;
+	img_t m_imgTopHat;
+	img_t m_imgPeak;
+	img_t m_imgThreshold;
+	img_t m_imgDilated;
+	img_t m_imgLocalMax;
+	img_t m_imgStars;
+	img_t m_imgBoolean;
+	img_t m_imgTmp;
 
 	// Leaves bool image with star locations
 	bool findStars( cv::Mat& img );
