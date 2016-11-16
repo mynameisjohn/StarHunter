@@ -426,8 +426,6 @@ std::vector<Circle> CollapseCircles( const std::vector<Circle>& vInput )
 
 // Host version of FindStarsInImage
 #if !SH_CUDA
-#include <omp.h>
-#include <iostream>
 std::vector<Circle> FindStarsInImage( float fStarRadius, img_t& dBoolImg )
 {
     // We need a contiguous image of bytes (which we'll be treating as bools)
@@ -444,9 +442,8 @@ std::vector<Circle> FindStarsInImage( float fStarRadius, img_t& dBoolImg )
         {
             uint8_t val = dBoolImg.at<uint8_t>( y, x );
             if ( val )
-#pragma omp critical
             {
-                std::cout << omp_get_thread_num() << std::endl;
+#pragma omp critical
                 vRet.push_back( { (float) x, (float) y, fStarRadius } );
             }
         }
