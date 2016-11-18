@@ -244,11 +244,11 @@ bool StarFinder_OptFlow::HandleImage( cv::Mat img )
 		float fDriftAvgY = 0;
 
 		// For every circle in our last vector
-		for ( Circle cOld : m_vLastCircles )
+		for ( const Circle cOld : m_vLastCircles )
 		{
 			// Try to find a match in this vector
 			bool bMatchFound = false;
-			for ( Circle cNew : vStarLocations )
+			for ( const Circle cNew : vStarLocations )
 			{
 				// Compute the drift between old and new
 				float fDistX = cNew.fX - cOld.fX;
@@ -287,6 +287,20 @@ bool StarFinder_OptFlow::GetDrift( float * pDriftX, float * pDriftY ) const
 	// Divide cumulative drift by # of images it was computed from
 	*pDriftX = m_fDriftX_Cumulative / float( m_nImagesProcessed );
 	*pDriftY = m_fDriftY_Cumulative / float( m_nImagesProcessed );
+
+	return true;
+}
+
+bool StarFinder_OptFlow::GetDriftN( float * pDriftX, float * pDriftY ) const
+{
+    // Nothing to average yet
+	if ( !( m_nImagesProcessed && pDriftX && pDriftY ) )
+		return false;
+
+	// Normalize drift values
+    float fMag = sqrt(pow(m_fDriftX_Cumulative, 2) + pow(m_fDriftY_Cumulative, 2));
+    *pDriftX = m_fDriftX_Cumulative / fMag;
+    *pDriftY = m_fDriftX_Cumulative / fMag;
 
 	return true;
 }

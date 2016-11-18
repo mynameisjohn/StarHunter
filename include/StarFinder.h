@@ -86,6 +86,7 @@ public:
 	StarFinder_OptFlow();
 	bool HandleImage( cv::Mat img ) override;
 	bool GetDrift( float * pDriftX, float * pDriftY ) const;
+	bool GetDriftN( float * pDriftX, float * pDriftY ) const;
 };
 
 // Finds overlapping circles and combines them
