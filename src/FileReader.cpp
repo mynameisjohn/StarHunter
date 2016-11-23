@@ -6,14 +6,14 @@ FileReader::FileReader( std::initializer_list<std::string> liFileNames ) :
 	m_liFileNames( liFileNames )
 {}
 
-bool FileReader::HasImages() const
+ImageSource::Status FileReader::GetStatus() const
 {
-	return m_liFileNames.empty() == false;
+	return m_liFileNames.empty() ? ImageSource::Status::DONE : ImageSource::Status::READY;
 }
 
 cv::Mat FileReader::GetNextImage()
 {
-	if ( !HasImages() )
+	if ( GetStatus() == ImageSource::Status::DONE )
 		throw std::runtime_error( "Error: FileReader has no more images!" );
 	
 	cv::Mat matRet = cv::imread( m_liFileNames.front() );

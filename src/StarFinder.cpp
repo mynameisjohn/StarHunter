@@ -313,10 +313,15 @@ StarFinder_ImgOffset::StarFinder_ImgOffset(FileReader_WithOfs * pFileReader):
 {}
 
 bool StarFinder_ImgOffset::HandleImage( cv::Mat img ) {
+    // Do default behavior
     if (StarFinder_Drift::HandleImage(img)){
+        // If we have a filereader
         if (m_pFileReader){
+            // Get drift values (returns false if < 2 images processed)
             float fDriftX(0), fDriftY(0);
             if (GetDrift(&fDriftX, &fDriftY)){
+                // Send drift value to offset, it will modify incoming
+                // images in an attempt to simulate camera movement
                 int nDriftX = (int)fDriftX;
                 int nDriftY = (int)fDriftY;
                 m_pFileReader->SetOffset(nDriftX, nDriftY);

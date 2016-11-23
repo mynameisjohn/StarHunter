@@ -91,6 +91,9 @@ public:
 	bool GetDriftN( float * pDriftX, float * pDriftY ) const;
 };
 
+// Same as above, but drift values are sent to
+// a FileReader_WithOfs instance to simulate
+// telescope mount movement
 class FileReader_WithOfs;
 class StarFinder_ImgOffset : public StarFinder_Drift
 {

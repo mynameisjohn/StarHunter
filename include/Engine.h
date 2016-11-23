@@ -7,12 +7,19 @@
 class ImageSource
 {
 public:
-	virtual bool HasImages() const = 0;		// Are there any images left?
-	virtual cv::Mat GetNextImage() = 0;	// Get the next image
+    enum class Status{
+        WAIT,
+        READY,
+        DONE
+    };
+
+	virtual Status GetStatus() const = 0;	// Status of image stream
+	virtual cv::Mat GetNextImage() = 0;	    // Get the next image
     virtual void Initialize() {}
     virtual void Finalize() {}
 
 	using Ptr = std::unique_ptr<ImageSource>;
+
 };
 
 class ImageProcessor

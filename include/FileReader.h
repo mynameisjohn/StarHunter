@@ -10,7 +10,7 @@ class FileReader : public ImageSource
 	std::list<std::string> m_liFileNames;
 public:
 	FileReader( std::initializer_list<std::string> liFileNames );
-	bool HasImages() const override;
+	ImageSource::Status GetStatus() const override;
 	cv::Mat GetNextImage() override;
 };
 

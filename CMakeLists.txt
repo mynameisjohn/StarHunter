@@ -6,10 +6,10 @@ SET(CMAKE_CXX_FLAGS "-std=c++11 -Wall")
 
 # If on linux, make sure to use gcc-4.8
 # (cuda can't handle new gcc apparently)
-IF(UNIX AND NOT APPLE)
+IF(UNIX AND SH_CUDA AND NOT APPLE)
     SET(CMAKE_C_COMPILER gcc-4.8)    
     SET(CMAKE_CXX_COMPILER g++-4.8)    
-ENDIF(UNIX AND NOT APPLE)
+ENDIF(UNIX AND SH_CUDA AND NOT APPLE)
 
 #CUDA flags
 IF(SH_CUDA)
