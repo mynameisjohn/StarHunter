@@ -63,7 +63,7 @@ ELSE(WIN32)
         SET(LIBRAW_LIB_DIR  /usr/local/lib)
         SET(LIBRAW_LIB raw)
         # libgphoto2
-        SET(CAM_INC_DIR /usr/local/include)
+        SET(CAM_INC_DIR /usr/include)
         # lib dir differs between ubuntu and os x
         IF(APPLE)
             SET(CAM_LIB_DIR /usr/local/lib)
