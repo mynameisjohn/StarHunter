@@ -53,7 +53,6 @@ IF(WIN32)
         SET(CAM_INC_DIR $ENV{LIBDIR}/EDSDK/include)
         SET(CAM_LIB $ENV{LIBDIR}/EDSDK/lib/${WIN_PLATFORM})
     ENDIF(${SH_USE_CAMERA})
-
 ELSE(WIN32)
     # OCV 3.1, handle debug and release
     SET(OCV_INC_DIR /usr/local//include)

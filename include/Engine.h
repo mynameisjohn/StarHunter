@@ -9,7 +9,7 @@ class ImageSource
 public:
 	virtual bool HasImages() const = 0;		// Are there any images left?
 	virtual cv::Mat GetNextImage() = 0;	// Get the next image
-    virtual void Inalize() {}
+    virtual void Initialize() {}
     virtual void Finalize() {}
 
 	using Ptr = std::unique_ptr<ImageSource>;

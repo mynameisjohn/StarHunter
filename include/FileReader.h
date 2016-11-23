@@ -23,5 +23,5 @@ public:
     FileReader_WithOfs(std::initializer_list<std::string> liFileNames);
     cv::Mat GetNextImage() override;
     void SetOffset(int nOfsX, int nOfsY);
-    void GetOffset(int * pnOfsX, int * pnOfsY);
+    void GetOffset(int * pnOfsX, int * pnOfsY) const;
 };
