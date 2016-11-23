@@ -4,6 +4,13 @@ PROJECT(StarHunter)
 
 SET(CMAKE_CXX_FLAGS "-std=c++11 -Wall")
 
+# If on linux, make sure to use gcc-4.8
+# (cuda can't handle new gcc apparently)
+IF(UNIX AND NOT APPLE)
+    SET(CMAKE_C_COMPILER gcc-4.8)    
+    SET(CMAKE_CXX_COMPILER g++-4.8)    
+ENDIF(UNIX AND NOT APPLE)
+
 #CUDA flags
 IF(SH_CUDA)
     # let CMake find CUDA
@@ -29,63 +36,51 @@ IF(WIN32)
         SET(WIN_PLATFORM "Win32")
     ENDIF(SH_CUDA)
 
-    # OCV 3.1, handle debug and release
+    # OCV 3.1
     SET(OCV_INC_DIR $ENV{LIBDIR}/OpenCV/31/include)
     SET(OCV_LIB_DIR $ENV{LIBDIR}/OpenCV/31/lib/${WIN_PLATFORM})
 
-    # Set up debug/release lib suffixes (suffices?)
-    # I may phase this out by creating some links
-    # and link against release on Windows
-    IF (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-        SET(LIBTYPE "Debug")
-        SET(OCV_LIB_SUFFIX "310d${LIB_SUFFIX}")
-    ELSE (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-        SET(LIBTYPE "Release")
-        SET(OCV_LIB_SUFFIX "310${LIB_SUFFIX}")
-    ENDIF (${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-
     # Do they want a camera SDK?
-    IF(${SH_USE_CAMERA})
+    IF(${SH_CAMERA})
         # LibRaw
         SET(LIBRAW_INC_DIR $ENV{LIBDIR}/LibRaw/include)
-        SET(LIBRAW_LIB $ENV{LIBDIR}/LibRaw/lib/${WIN_PLATFORM}/${EDSDK_LIB_DIR}/EDSDK.lib)
+        SET(LIBRAW_LIB_DIR $ENV{LIBDIR}/LibRaw/lib/${WIN_PLATFORM})
+        SET(LIBRAW_LIB LibRaw.lib)
         # Canon EDSDK (no libgphoto2 on Windows)
         SET(CAM_INC_DIR $ENV{LIBDIR}/EDSDK/include)
-        SET(CAM_LIB $ENV{LIBDIR}/EDSDK/lib/${WIN_PLATFORM})
-    ENDIF(${SH_USE_CAMERA})
+        SET(CAM_LIB_DIR $ENV{LIBDIR}/EDSDK/lib/${WIN_PLATFORM})
+        SET(CAM_LIB EDSDK.lib)
+    ENDIF(${SH_CAMERA})
 ELSE(WIN32)
     # OCV 3.1, handle debug and release
     SET(OCV_INC_DIR /usr/local//include)
     SET(OCV_LIB_DIR /usr/local/lib)
 
-    # Either dylib or static lib... not sure about libRaw
-    IF(APPLE)
-        SET(LIB_SUFFIX ".dylib")
-    ELSE(APPLE)
-        SET(LIB_SUFFIX ".a")
-    ENDIF(APPLE)
-
-    # No need for this on unix unless I build debug
-    SET(OCV_LIB_SUFFIX ${LIB_SUFFIX})
-
     # Do they want a camera SDK?
-    IF(${SH_USE_CAMERA})
+    IF(${SH_CAMERA})
         # LibRaw
         SET(LIBRAW_INC_DIR /usr/local/include)
-        SET(LIBRAW_LIB /usr/local/lib/libRaw${LIB_SUFFIX})
+        SET(LIBRAW_LIB_DIR  /usr/local/lib)
+        SET(LIBRAW_LIB raw)
         # libgphoto2
         SET(CAM_INC_DIR /usr/local/include)
-        SET(CAM_LIB /usr/local/lib/libghoto2${LIB_SUFFIX})
-    ENDIF(${SH_USE_CAMERA})
+        # lib dir differs between ubuntu and os x
+        IF(APPLE)
+            SET(CAM_LIB_DIR /usr/local/lib)
+        ELSE(APPLE)
+            SET(CAM_LIB_DIR /usr/lib/x86_64-linux-gnu)
+        ENDIF(APPLE)
+        SET(CAM_LIB gphoto2)
+    ENDIF(${SH_CAMERA})
 ENDIF(WIN32)
 
 # All libraries in one macro
 SET(SH_LIBS
     # OpenCV libs
-    ${OCV_LIB_DIR}/opencv_core${OCV_LIB_SUFFIX}
-    ${OCV_LIB_DIR}/opencv_imgproc${OCV_LIB_SUFFIX}
-    ${OCV_LIB_DIR}/opencv_imgcodecs${OCV_LIB_SUFFIX}
-    ${OCV_LIB_DIR}/opencv_highgui${OCV_LIB_SUFFIX}
+    opencv_core
+    opencv_imgproc
+    opencv_imgcodecs
+    opencv_highgui
     # Camera libs
     ${LIBRAW_LIB}
     ${CAM_LIB})
@@ -94,20 +89,23 @@ SET(SH_LIBS
 IF(SH_CUDA)
     SET(SH_LIBS ${SH_LIBS}
         # opencv cuda libs
-        ${OCV_LIB_DIR}/opencv_cudaimgproc${OCV_LIB_SUFFIX}
-        ${OCV_LIB_DIR}/opencv_cudaarithm${OCV_LIB_SUFFIX}
-        ${OCV_LIB_DIR}/opencv_cudafilters${OCV_LIB_SUFFIX}
+        opencv_cudaimgproc
+        opencv_cudaarithm
+        opencv_cudafilters
         # cuda runtime libs
         ${CUDA_LIBRARIES})
 ENDIF(SH_CUDA)
 
+# Set up link directories
+LINK_DIRECTORIES(${OCV_LIB_DIR} ${LIBRAW_LIB_DIR} ${CAM_LIB_DIR})
+
 # Include directories
 # those that are undefined will be blank
 INCLUDE_DIRECTORIES(
-${CMAKE_CURRENT_SOURCE_DIR}/include
-${OCV_INC_DIR}
-${LIBRAW_INC_DIR}
-${CAM_INC_DIR})
+    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${OCV_INC_DIR}
+    ${LIBRAW_INC_DIR}
+    ${CAM_INC_DIR})
 
 # Add source files (add .cu for cuda)
 IF(SH_CUDA)
@@ -129,5 +127,4 @@ ELSE(SH_CUDA)
 ENDIF(SH_CUDA)
 
 # Link libraries with executable
-TARGET_LINK_LIBRARIES(StarHunter LINK_PUBLIC
-${SH_LIBS})
+TARGET_LINK_LIBRARIES(StarHunter LINK_PUBLIC ${SH_LIBS})
