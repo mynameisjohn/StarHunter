@@ -9,6 +9,8 @@ class ImageSource
 public:
 	virtual bool HasImages() const = 0;		// Are there any images left?
 	virtual cv::Mat GetNextImage() = 0;	// Get the next image
+    virtual void Inalize() {}
+    virtual void Finalize() {}
 
 	using Ptr = std::unique_ptr<ImageSource>;
 };
@@ -17,7 +19,9 @@ class ImageProcessor
 {
 public:
 	virtual bool HandleImage( cv::Mat img ) = 0;	// Take an image as input
-	virtual void Finalize() {}						// When there are no more images
+
+    virtual void Initialize() {}
+	virtual void Finalize() {}						
 
 	using Ptr = std::unique_ptr<ImageProcessor>;
 };
