@@ -22,6 +22,10 @@ cv::Mat FileReader::GetNextImage()
 	return matRet;
 }
 
+FileReader_WithOfs::FileReader_WithOfs( std::initializer_list<std::string> liFileNames ) :
+    FileReader(liFileNames)
+{}
+
 void FileReader_WithOfs::SetOffset(int nOfsX, int nOfsY){
     m_nOfsX = std::max(0, nOfsX);
     m_nOfsY = std::max(0, nOfsY);

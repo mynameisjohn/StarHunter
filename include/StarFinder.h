@@ -1,5 +1,6 @@
 #include "Engine.h"
 
+#include <memory>
 #include <vector>
 #include <utility>
 
@@ -57,6 +58,7 @@ public:
 	StarFinder();
 
 	bool HandleImage( cv::Mat img ) override;
+
 };
 
 // UI implementation - pops opencv window
@@ -72,7 +74,7 @@ public:
 // Implementation that computes the average
 // drift in star positions across each
 // handled image. 
-class StarFinder_OptFlow : public StarFinder
+class StarFinder_Drift : public StarFinder
 {
 	// The drift will be averaged when requested
 	int m_nImagesProcessed;
@@ -83,10 +85,20 @@ class StarFinder_OptFlow : public StarFinder
 	// We'll be looking for their match
 	std::vector<Circle> m_vLastCircles;
 public:
-	StarFinder_OptFlow();
+	StarFinder_Drift();
 	bool HandleImage( cv::Mat img ) override;
 	bool GetDrift( float * pDriftX, float * pDriftY ) const;
 	bool GetDriftN( float * pDriftX, float * pDriftY ) const;
+};
+
+class FileReader_WithOfs;
+class StarFinder_ImgOffset : public StarFinder_Drift
+{
+    FileReader_WithOfs * m_pFileReader;
+
+public:
+    StarFinder_ImgOffset(FileReader_WithOfs * pFileReader);
+    bool HandleImage( cv::Mat img ) override;
 };
 
 // Finds overlapping circles and combines them

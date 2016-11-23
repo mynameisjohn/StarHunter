@@ -1,5 +1,6 @@
 #include "StarFinder.h"
 #include "FnPtrHelper.h"
+#include "FileReader.h"
 
 #include <opencv2/opencv.hpp>
 
@@ -28,6 +29,7 @@ void DoGaussianFilter( const int nFilterRadius, const double dSigma, img_t& inpu
 void DoTophatFilter( const int nFilterRadius, img_t& input, img_t& output );
 void DoDilationFilter( const int nFilterRadius, img_t& input, img_t& output );
 
+// Arbitrarily small number
 const double kEPS = .001;
 
 StarFinder::StarFinder() :
@@ -212,14 +214,14 @@ bool StarFinder_UI::HandleImage( cv::Mat img )
 	return true;
 }
 
-StarFinder_OptFlow::StarFinder_OptFlow() :
+StarFinder_Drift::StarFinder_Drift() :
 	StarFinder(),
 	m_nImagesProcessed( 0 ),
 	m_fDriftX_Cumulative( 0 ),
 	m_fDriftY_Cumulative( 0 )
 {}
 
-bool StarFinder_OptFlow::HandleImage( cv::Mat img )
+bool StarFinder_Drift::HandleImage( cv::Mat img )
 {
 	if ( !findStars( img ) )
 		return false;
@@ -278,7 +280,7 @@ bool StarFinder_OptFlow::HandleImage( cv::Mat img )
 	return true;
 }
 
-bool StarFinder_OptFlow::GetDrift( float * pDriftX, float * pDriftY ) const
+bool StarFinder_Drift::GetDrift( float * pDriftX, float * pDriftY ) const
 {
 	// Nothing to average yet
 	if ( !( m_nImagesProcessed && pDriftX && pDriftY ) )
@@ -291,7 +293,7 @@ bool StarFinder_OptFlow::GetDrift( float * pDriftX, float * pDriftY ) const
 	return true;
 }
 
-bool StarFinder_OptFlow::GetDriftN( float * pDriftX, float * pDriftY ) const
+bool StarFinder_Drift::GetDriftN( float * pDriftX, float * pDriftY ) const
 {
     // Nothing to average yet
 	if ( !( m_nImagesProcessed && pDriftX && pDriftY ) )
@@ -303,6 +305,28 @@ bool StarFinder_OptFlow::GetDriftN( float * pDriftX, float * pDriftY ) const
     *pDriftY = m_fDriftX_Cumulative / fMag;
 
 	return true;
+}
+
+StarFinder_ImgOffset::StarFinder_ImgOffset(FileReader_WithOfs * pFileReader):
+    StarFinder_Drift(),
+    m_pFileReader(pFileReader)
+{}
+
+bool StarFinder_ImgOffset::HandleImage( cv::Mat img ) {
+    if (StarFinder_Drift::HandleImage(img)){
+        if (m_pFileReader){
+            float fDriftX(0), fDriftY(0);
+            if (GetDrift(&fDriftX, &fDriftY)){
+                int nDriftX = (int)fDriftX;
+                int nDriftY = (int)fDriftY;
+                m_pFileReader->SetOffset(nDriftX, nDriftY);
+            }
+        }
+
+        return true;
+    }
+
+    return false;
 }
 
 void displayImage( std::string strWindowName, cv::Mat& img )
