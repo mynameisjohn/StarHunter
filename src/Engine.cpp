@@ -3,6 +3,8 @@
 #include <thread>
 #include <chrono>
 
+#include <libraw.h>
+
 Engine::Engine( ImageSource::Ptr&& pImgSrc, ImageProcessor::Ptr&& pImgProc ) :
 	m_pImageSource( std::move( pImgSrc ) ),
 	m_pImageProcessor( std::move( pImgProc ) )
