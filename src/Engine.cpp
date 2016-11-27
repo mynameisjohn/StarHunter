@@ -18,12 +18,12 @@ void Engine::Run()
     m_pImageProcessor->Initialize();
 
     // Iterate over all images
-    ImageSource::Status st = m_pImageSource->GetStatus();
-    for ( ; st != ImageSource::Status::DONE; st = m_pImageSource->GetStatus()){
-        if (st == ImageSource::Status::WAIT){
+    using ImgStat = ImageSource::Status;
+    for ( ImgStat st = m_pImageSource->GetStatus(); st != ImgStat::DONE; st = m_pImageSource->GetStatus()){
+        if (st == ImgStat::WAIT){
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
-        else if (st == ImageSource::Status::READY){
+        else if (st == ImgStat::READY){
             m_pImageProcessor->HandleImage(m_pImageSource->GetNextImage());
         }
     }

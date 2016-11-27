@@ -78,6 +78,8 @@ class StarFinder_Drift : public StarFinder
 {
 	// The drift will be averaged when requested
 	int m_nImagesProcessed;
+    float m_fDriftX_Prev;
+    float m_fDriftY_Prev;
 	float m_fDriftX_Cumulative;
 	float m_fDriftY_Cumulative;
 
@@ -87,20 +89,20 @@ class StarFinder_Drift : public StarFinder
 public:
 	StarFinder_Drift();
 	bool HandleImage( cv::Mat img ) override;
-	bool GetDrift( float * pDriftX, float * pDriftY ) const;
-	bool GetDriftN( float * pDriftX, float * pDriftY ) const;
+    bool GetDrift_Prev( float * pDriftX, float * pDriftY ) const;
+    bool GetDrift_Cumulative( float * pDriftX, float * pDriftY ) const;
 };
 
 // Same as above, but drift values are sent to
 // a FileReader_WithOfs instance to simulate
 // telescope mount movement
-class FileReader_WithOfs;
+class FileReader_WithDrift;
 class StarFinder_ImgOffset : public StarFinder_Drift
 {
-    FileReader_WithOfs * m_pFileReader;
+    FileReader_WithDrift * m_pFileReader;
 
 public:
-    StarFinder_ImgOffset(FileReader_WithOfs * pFileReader);
+    StarFinder_ImgOffset( FileReader_WithDrift * pFileReader);
     bool HandleImage( cv::Mat img ) override;
 };
 

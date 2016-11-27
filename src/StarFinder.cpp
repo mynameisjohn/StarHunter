@@ -215,8 +215,10 @@ bool StarFinder_UI::HandleImage( cv::Mat img )
 }
 
 StarFinder_Drift::StarFinder_Drift() :
-	StarFinder(),
-	m_nImagesProcessed( 0 ),
+    StarFinder(),
+    m_nImagesProcessed( 0 ),
+    m_fDriftX_Prev( 0 ),
+    m_fDriftY_Prev( 0 ),
 	m_fDriftX_Cumulative( 0 ),
 	m_fDriftY_Cumulative( 0 )
 {}
@@ -272,6 +274,8 @@ bool StarFinder_Drift::HandleImage( cv::Mat img )
 
 		// Update cached positions, inc cumulative drift counter
 		m_vLastCircles = std::move( vStarLocations );
+        m_fDriftX_Prev = fDriftAvgX;
+        m_fDriftY_Prev = fDriftAvgY;
 		m_fDriftX_Cumulative += fDriftAvgX;
 		m_fDriftY_Cumulative += fDriftAvgY;
 		m_nImagesProcessed++;
@@ -280,7 +284,19 @@ bool StarFinder_Drift::HandleImage( cv::Mat img )
 	return true;
 }
 
-bool StarFinder_Drift::GetDrift( float * pDriftX, float * pDriftY ) const
+bool StarFinder_Drift::GetDrift_Prev( float * pDriftX, float * pDriftY ) const
+{
+    // Nothing to average yet
+    if ( !( m_nImagesProcessed && pDriftX && pDriftY ) )
+        return false;
+
+    *pDriftX = m_fDriftX_Prev;
+    *pDriftY = m_fDriftY_Prev;
+
+    return true;
+}
+
+bool StarFinder_Drift::GetDrift_Cumulative( float * pDriftX, float * pDriftY ) const
 {
 	// Nothing to average yet
 	if ( !( m_nImagesProcessed && pDriftX && pDriftY ) )
@@ -293,38 +309,42 @@ bool StarFinder_Drift::GetDrift( float * pDriftX, float * pDriftY ) const
 	return true;
 }
 
-bool StarFinder_Drift::GetDriftN( float * pDriftX, float * pDriftY ) const
-{
-    // Nothing to average yet
-	if ( !( m_nImagesProcessed && pDriftX && pDriftY ) )
-		return false;
+//bool StarFinder_Drift::GetDriftN( float * pDriftX, float * pDriftY ) const
+//{
+//    // Nothing to average yet
+//	if ( !( m_nImagesProcessed && pDriftX && pDriftY ) )
+//		return false;
+//
+//	// Normalize drift values
+//    float fMag = sqrt(pow(m_fDriftX_Cumulative, 2) + pow(m_fDriftY_Cumulative, 2));
+//    *pDriftX = m_fDriftX_Cumulative / fMag;
+//    *pDriftY = m_fDriftX_Cumulative / fMag;
+//
+//	return true;
+//}
 
-	// Normalize drift values
-    float fMag = sqrt(pow(m_fDriftX_Cumulative, 2) + pow(m_fDriftY_Cumulative, 2));
-    *pDriftX = m_fDriftX_Cumulative / fMag;
-    *pDriftY = m_fDriftX_Cumulative / fMag;
-
-	return true;
-}
-
-StarFinder_ImgOffset::StarFinder_ImgOffset(FileReader_WithOfs * pFileReader):
+StarFinder_ImgOffset::StarFinder_ImgOffset( FileReader_WithDrift * pFileReader):
     StarFinder_Drift(),
     m_pFileReader(pFileReader)
 {}
 
-bool StarFinder_ImgOffset::HandleImage( cv::Mat img ) {
+bool StarFinder_ImgOffset::HandleImage( cv::Mat img ) 
+{ 
+    displayImage( "Offset", img );
+
     // Do default behavior
     if (StarFinder_Drift::HandleImage(img)){
         // If we have a filereader
-        if (m_pFileReader){
+        if (m_pFileReader)
+        {
             // Get drift values (returns false if < 2 images processed)
             float fDriftX(0), fDriftY(0);
-            if (GetDrift(&fDriftX, &fDriftY)){
-                // Send drift value to offset, it will modify incoming
-                // images in an attempt to simulate camera movement
-                int nDriftX = (int)fDriftX;
-                int nDriftY = (int)fDriftY;
-                m_pFileReader->SetOffset(nDriftX, nDriftY);
+            if ( GetDrift_Prev( &fDriftX, &fDriftY ) )
+            {
+                // Increment drift of FR velocity by current amount
+                int nDriftX = (int) fDriftX;
+                int nDriftY = (int) fDriftY;
+                m_pFileReader->IncDriftVel( -nDriftX, nDriftY );
             }
         }
 

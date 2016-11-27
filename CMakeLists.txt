@@ -35,7 +35,7 @@ IF(WIN32)
     ELSE(SH_CUDA)
         SET(WIN_PLATFORM "Win32")
     ENDIF(SH_CUDA)
-
+    
     # OCV 3.1
     SET(OCV_INC_DIR $ENV{LIBDIR}/OpenCV/31/include)
     SET(OCV_LIB_DIR $ENV{LIBDIR}/OpenCV/31/lib/${WIN_PLATFORM})

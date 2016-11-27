@@ -2,10 +2,6 @@
 
 #include <algorithm>
 
-FileReader::FileReader( std::initializer_list<std::string> liFileNames ) :
-	m_liFileNames( liFileNames )
-{}
-
 ImageSource::Status FileReader::GetStatus() const
 {
 	return m_liFileNames.empty() ? ImageSource::Status::DONE : ImageSource::Status::READY;
@@ -22,38 +18,74 @@ cv::Mat FileReader::GetNextImage()
 	return matRet;
 }
 
-FileReader_WithOfs::FileReader_WithOfs( std::initializer_list<std::string> liFileNames ) :
-    FileReader(liFileNames)
-{}
-
-void FileReader_WithOfs::SetOffset(int nOfsX, int nOfsY){
-    m_nOfsX = std::max(0, nOfsX);
-    m_nOfsY = std::max(0, nOfsY);
+void FileReader_WithDrift::IncDriftVel( int nDriftX, int nDriftY )
+{
+    m_nDriftVelX += nDriftX;
+    m_nDriftVelY += nDriftY;
 }
 
-void FileReader_WithOfs::GetOffset(int * pnOfsX, int * pnOfsY) const{
+void FileReader_WithDrift::SetDriftVel( int nDriftX, int nDriftY )
+{
+    m_nDriftVelX = nDriftX;
+    m_nDriftVelY = nDriftY;
+}
+
+void FileReader_WithDrift::SetOffset( int nOfsX, int nOfsY )
+{
+    m_nOfsX = nOfsX;
+    m_nOfsY = nOfsY;
+}
+
+void FileReader_WithDrift::GetDriftVel( int * pnDriftX, int * pnDriftY ) const
+{
+    if ( pnDriftX )
+        *pnDriftX = m_nDriftVelX;
+    if ( pnDriftY )
+        *pnDriftY = m_nDriftVelY;
+}
+
+void FileReader_WithDrift::GetOffset(int * pnOfsX, int * pnOfsY) const{
     if (pnOfsX)
         *pnOfsX = m_nOfsX;
     if (pnOfsY)
         *pnOfsY = m_nOfsY;
 }
 
-cv::Mat FileReader_WithOfs::GetNextImage(){
+cv::Mat FileReader_WithDrift::GetNextImage()
+{
     // Get next image
     cv::Mat img = FileReader::GetNextImage();
 
-    // Apply the inverse offset to the image, i.e
-    // if our offset is 10 pixels up, move the image
-    // 10 pixels down (to simulate our viewpoint moving)
-    size_t uOfsX = std::min(m_nOfsX, img.cols);
-    size_t uOfsY = std::min(m_nOfsY, img.rows);
+    // Update offset value
+    m_nOfsX += m_nDriftVelX;
+    m_nOfsY += m_nDriftVelY;
 
-    // Create black image
-    cv::Mat ret(cv::Mat::zeros(img.size(), img.type()));
-    // Get sub image of original
-    cv::Mat subImg = img(cv::Rect(uOfsX, uOfsY, img.cols-uOfsX, img.rows-uOfsY));
-    // Copy partial image into black image
-    subImg.copyTo(ret(cv::Rect(0, 0, img.cols-uOfsX, img.rows-uOfsY)));
+    // Return if no offset
+    if ( !( m_nOfsX || m_nOfsY ) )
+        return img;
     
+    // std::cout << m_nOfsX << ", " << m_nOfsY << std::endl;
+
+    // Do the translation by moving a sub-image
+    // at an offset into a new mat
+    cv::Rect rcSrc, rcDst;
+
+    // X position, left is 0
+    rcSrc.x = m_nOfsX < 0 ? -m_nOfsX : 0;
+    rcSrc.width = img.cols - abs( m_nOfsX );
+    rcDst.x = -m_nOfsX - rcSrc.x;
+    rcDst.width = rcSrc.width;
+
+    // Y position, top is 0 (so flip)
+    rcSrc.y = m_nOfsY > 0 ? m_nOfsY : 0;
+    rcSrc.height = img.cols - abs( m_nOfsY );
+    rcDst.y = rcSrc.y - m_nOfsY;
+    rcDst.height = rcSrc.height;
+
+    // Copy sub image src into zeroed out dst
+    cv::Mat ret( cv::Mat::zeros( img.size(), img.type() ) );
+    cv::Mat subImg = img( rcSrc );
+    subImg.copyTo( ret( rcDst ) );
+
     return ret;
 }
