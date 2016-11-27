@@ -117,8 +117,10 @@ void SHCamera::Initialize()
     checkErr( EdsSendStatusCommand( m_CamRef, kEdsCameraStatusCommand_UIUnLock, 0 ) );
 #else
     auto checkErr = [](const int retVal, std::string strName){
-        std::string strErrMsg = "Error: " + strName + " failed with error code " + std::to_string(retVal);
-        throw std::runtime_error(strErrMsg);
+        if (retVal != GP_OK){
+            std::string strErrMsg = "Error: " + strName + " failed with error code " + std::to_string(retVal);
+            throw std::runtime_error(strErrMsg);
+        }
     };
 
     // gphoto2 context and camera
