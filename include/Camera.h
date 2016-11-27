@@ -5,8 +5,11 @@
 #include <thread>
 #include <mutex>
 #include <atomic>
+#include <condition_variable>
 
+#ifdef WIN32
 #include "EDSDK.h"
+#endif
 
 class Camera : public ImageSource
 {
@@ -14,16 +17,15 @@ class Camera : public ImageSource
     std::mutex m_muCapture;
     std::list<cv::Mat> m_liCapturedImages;
 
-    
-
-    std::mutex m_muImageDownload;
-    std::list<EdsDirectoryItemRef> m_liImagesToDownload;
+#ifdef WIN32
+    std::mutex m_muCamSync;
+    std::condition_variable m_cvCamSync;
+    EdsDirectoryItemRef m_ImgRefToDownload;
+    EdsCameraRef m_CamRef;
+#endif
 
     std::atomic_bool m_abCapture;
-
     std::vector<uint16_t> m_vBayerDataBuffer;
-    EdsCameraRef m_CamRef;
-
 public:
     Camera();
     ~Camera();
@@ -36,8 +38,8 @@ public:
 private:
 
     void threadProc();
-    void handleShutDown();
 
+#ifdef WIN32
     EdsError handleObjectEvent_impl( EdsUInt32			inEvent,
                                      EdsBaseRef			inRef,
                                      EdsVoid *			inContext );
@@ -58,4 +60,5 @@ private:
         EdsUInt32			inParam,
         EdsVoid *			inContext
     );
+#endif
 };

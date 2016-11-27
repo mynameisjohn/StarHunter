@@ -46,10 +46,13 @@ IF(WIN32)
         SET(LIBRAW_INC_DIR $ENV{LIBDIR}/LibRaw/include)
         SET(LIBRAW_LIB_DIR $ENV{LIBDIR}/LibRaw/lib/${WIN_PLATFORM})
         SET(LIBRAW_LIB LibRaw.lib)
+        
         # Canon EDSDK (no libgphoto2 on Windows)
-        SET(CAM_INC_DIR $ENV{LIBDIR}/EDSDK/include)
+        # EDSDK needs a window, so use SDL2
+        FIND_PACKAGE(SDL2)
+        SET(CAM_INC_DIR $ENV{LIBDIR}/EDSDK/include ${SDL2_INCLUDE_DIR})
         SET(CAM_LIB_DIR $ENV{LIBDIR}/EDSDK/lib/${WIN_PLATFORM})
-        SET(CAM_LIB EDSDK.lib)
+        SET(CAM_LIB EDSDK.lib ${SDL2_LIBRARY})
     ENDIF(${SH_CAMERA})
 ELSE(WIN32)
     # OCV 3.1, handle debug and release

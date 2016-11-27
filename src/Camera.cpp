@@ -6,7 +6,8 @@
 #include <chrono>
 
 Camera::Camera() :
-    m_CamRef( nullptr )
+    m_CamRef( nullptr ),
+    m_ImgRefToDownload( nullptr )
 {}
 
 Camera::~Camera()
@@ -42,6 +43,7 @@ cv::Mat Camera::GetNextImage()
 
 void Camera::Initialize()
 {   
+#ifdef WIN32
     // Try to get camera, clean up if fail
     EdsCameraListRef cameraList = nullptr;
     EdsCameraRef camera = nullptr;
@@ -72,7 +74,7 @@ void Camera::Initialize()
     // Free camera list
     EdsRelease( cameraList );
     cameraList = nullptr;
-
+    
     // Get device info
     EdsDeviceInfo deviceInfo;
     checkErr( EdsGetDeviceInfo( camera, &deviceInfo ) );
@@ -85,6 +87,26 @@ void Camera::Initialize()
 
     m_CamRef = camera;
 
+    //The communication with the camera begins
+    checkErr( EdsOpenSession( m_CamRef ) );
+
+    // Preservation ahead is set to PC
+    EdsUInt32 saveTo = kEdsSaveTo_Host;
+    checkErr( EdsSetPropertyData( m_CamRef, kEdsPropID_SaveTo, 0, sizeof( saveTo ), &saveTo ) );
+
+    // UI lock
+    checkErr( EdsSendStatusCommand( m_CamRef, kEdsCameraStatusCommand_UILock, 0 ) );
+
+    EdsCapacity capacity = { 0x7FFFFFFF, 0x1000, 1 };
+    checkErr( EdsSetCapacity( m_CamRef, capacity ) );
+
+    // It releases it when locked
+    checkErr( EdsSendStatusCommand( m_CamRef, kEdsCameraStatusCommand_UIUnLock, 0 ) );
+#else
+
+#endif
+
+    // Start capture thread
     m_abCapture.store( true );
     m_thCapture = std::thread( [this]()
     {
@@ -94,54 +116,49 @@ void Camera::Initialize()
 
 void Camera::Finalize()
 {
+    // Stop capture thread
     m_abCapture.store( false );
 
-    std::mutex m_muImageDownload;
-    for ( EdsDirectoryItemRef& directoryItem : m_liImagesToDownload )
-    {
-        if ( directoryItem )
-            EdsRelease( directoryItem );
-    }
-        
+    m_thCapture.join();
+
+    // Free EDS stuff
+    if ( m_ImgRefToDownload )
+        EdsRelease( m_ImgRefToDownload );
+    
     if ( m_CamRef )
         EdsRelease( m_CamRef );
 }
 
 void Camera::threadProc()
 {
-    EdsError err( EDS_ERR_OK );
-    auto checkErr = [&err]( EdsError rErr )
+    // Error check
+    auto checkErr = []( EdsError e )
     {
-        err = rErr;
-        if ( err == EDS_ERR_OK )
+        if ( e == EDS_ERR_OK )
             return;
 
         throw std::runtime_error( "Error opening camera!" );
     };
 
+#ifdef WIN32
     // When using the SDK from another thread in Windows, 
     // you must initialize the COM library by calling CoInitialize 
     ::CoInitializeEx( NULL, COINIT_MULTITHREADED );
-
-    //The communication with the camera begins
-    checkErr( EdsOpenSession( m_CamRef ) );
-
-    //Preservation ahead is set to PC
-    EdsUInt32 saveTo = kEdsSaveTo_Host;
-    checkErr( EdsSetPropertyData( m_CamRef, kEdsPropID_SaveTo, 0, sizeof( saveTo ), &saveTo ) );
-
-    //UI lock
-    checkErr( EdsSendStatusCommand( m_CamRef, kEdsCameraStatusCommand_UILock, 0 ) );
-
-    EdsCapacity capacity = { 0x7FFFFFFF, 0x1000, 1 };
-    checkErr( EdsSetCapacity( m_CamRef, capacity ) );
-
-    //It releases it when locked
-    checkErr( EdsSendStatusCommand( m_CamRef, kEdsCameraStatusCommand_UIUnLock, 0 ) );
+#endif
 
     while ( m_abCapture.load() )
     {
-        EdsError err = EDS_ERR_OK;
+#ifdef WIN32
+        EdsError err( EDS_ERR_OK );
+        EdsError * pErr( &err );
+        auto checkErr = [pErr]( EdsError err )
+        {
+            *pErr = err;
+            if ( err == EDS_ERR_OK )
+                return;
+
+            throw std::runtime_error( "Error taking picture!" );
+        };
 
         // Press shutter to take a picture
         try
@@ -149,140 +166,132 @@ void Camera::threadProc()
             checkErr( EdsSendCommand( m_CamRef, kEdsCameraCommand_PressShutterButton, kEdsCameraCommand_ShutterButton_Completely ) );
             checkErr( EdsSendCommand( m_CamRef, kEdsCameraCommand_PressShutterButton, kEdsCameraCommand_ShutterButton_OFF ) );
         }
-
+        // Notification of error
         catch ( std::runtime_error e )
         {
-            //Notification of error
-            if ( err != EDS_ERR_OK )
+            // We can retry if it's busy, otherwise something bad has happened
+            if ( err != EDS_ERR_DEVICE_BUSY )
             {
-                // We can retry if it's busy
-                if ( err != EDS_ERR_DEVICE_BUSY )
-                {
-                    // But otherwise something bad has happened
-                    throw std::runtime_error( "Error taking picture!" );
-                }
+                throw std::runtime_error( "Error taking picture!" );
             }
         }
 
-        // See if we have any images to download
-        std::list<EdsDirectoryItemRef> liImagesToDownload;
+        // Wait for response
+        std::unique_lock<std::mutex> lk( m_muCamSync );
+        m_cvCamSync.wait( lk );
+
+        // Acquisition of the downloaded image information
+        EdsDirectoryItemInfo	dirItemInfo;
+        checkErr( EdsGetDirectoryItemInfo( m_ImgRefToDownload, &dirItemInfo ) );
+
+        // Store in a memory stream
+        EdsStreamRef stream = nullptr;
+        checkErr( EdsCreateMemoryStream( dirItemInfo.size, &stream ) );
+
+        // Download image
+        checkErr( EdsDownload( m_ImgRefToDownload, dirItemInfo.size, stream ) );
+
+        // Forwarding completion
+        checkErr( EdsDownloadComplete( m_ImgRefToDownload ) );
+
+        // Release Item
+        if ( m_ImgRefToDownload != nullptr )
         {
-            std::lock_guard<std::mutex> lg( m_muImageDownload );
-            if ( m_liImagesToDownload.empty() == false )
-            {
-                liImagesToDownload.splice( liImagesToDownload.begin(), m_liImagesToDownload );
-            }
+            EdsRelease( m_ImgRefToDownload );
+            m_ImgRefToDownload = nullptr;
         }
 
-        // Download any images
-        std::list<cv::Mat> liNewImages;
-        for ( EdsDirectoryItemRef& directoryItem : liImagesToDownload )
+        // Get stream info
+        void * pData( nullptr );
+        EdsUInt64 uDataSize( 0 );
+        checkErr( EdsGetLength( stream, &uDataSize ) );
+        checkErr( EdsGetPointer( stream, &pData ) );
+#else
+
+#endif // WIN32
+
+        // Open the CR2 file with LibRaw, unpack, and create image
+        LibRaw lrProc;
+        assert( LIBRAW_SUCCESS == lrProc.open_buffer( pData, uDataSize ) );
+        assert( LIBRAW_SUCCESS == lrProc.unpack() );
+        assert( LIBRAW_SUCCESS == lrProc.raw2image() );
+
+        // Get image dimensions
+        int width = lrProc.imgdata.sizes.iwidth;
+        int height = lrProc.imgdata.sizes.iheight;
+
+        // Create a buffer of ushorts containing the pixel values of the
+        // "BG Bayered" image (even rows are RGRGRG..., odd are GBGBGB...)'
+        if ( m_vBayerDataBuffer.empty() )
+            m_vBayerDataBuffer.resize( width*height );
+        else
+            std::fill( m_vBayerDataBuffer.begin(), m_vBayerDataBuffer.end(), 0 );
+
+        std::vector<uint16_t>::iterator itBayer = m_vBayerDataBuffer.begin();
+        for ( int y = 0; y < height; y++ )
         {
-            EdsStreamRef			stream = NULL;
-
-            // Acquisition of the downloaded image information
-            EdsDirectoryItemInfo	dirItemInfo;
-            checkErr( EdsGetDirectoryItemInfo( directoryItem, &dirItemInfo ) );
-            
-            // Store in a memory stream
-            checkErr( EdsCreateMemoryStream( dirItemInfo.size, &stream ) );
-            
-            // Download image
-            checkErr( EdsDownload( directoryItem, dirItemInfo.size, stream ) );
-            
-            // Forwarding completion
-            checkErr( EdsDownloadComplete( directoryItem ) );
-
-            //Release Item
-            if ( directoryItem != NULL )
+            for ( int x = 0; x < width; x++ )
             {
-                err = EdsRelease( directoryItem );
-                directoryItem = NULL;
+                // Get pixel idx
+                int idx = y * width + x;
+
+                // Each pixel is an array of 4 shorts rgbg
+                ushort * uRGBG = lrProc.imgdata.image[idx];
+                int rowMod = ( y ) % 2; // 0 if even, 1 if odd
+                int colMod = ( x + rowMod ) % 2; // 1 if even, 0 if odd
+                int clrIdx = 2 * rowMod + colMod;
+                ushort val = uRGBG[clrIdx] << 4;
+                *itBayer++ = val;
             }
-
-            // Get stream info
-            void * pData( nullptr );
-            EdsUInt64 uDataSize( 0 );
-            checkErr( EdsGetLength( stream, &uDataSize ) );
-            checkErr( EdsGetPointer( stream, &pData ) );
-
-            // Open the CR2 file with LibRaw, unpack, and create image
-            LibRaw lrProc;
-            assert( LIBRAW_SUCCESS == lrProc.open_buffer( pData, uDataSize ) );
-            assert( LIBRAW_SUCCESS == lrProc.unpack() );
-            assert( LIBRAW_SUCCESS == lrProc.raw2image() );
-
-            // Get image dimensions
-            int width = lrProc.imgdata.sizes.iwidth;
-            int height = lrProc.imgdata.sizes.iheight;
-
-            // Create a buffer of ushorts containing the pixel values of the
-            // "BG Bayered" image (even rows are RGRGRG..., odd are GBGBGB...)'
-            if ( m_vBayerDataBuffer.empty() )
-                m_vBayerDataBuffer.resize( width*height );
-            else
-                std::fill( m_vBayerDataBuffer.begin(), m_vBayerDataBuffer.end(), 0 );
-
-            std::vector<uint16_t>::iterator itBayer = m_vBayerDataBuffer.begin();
-            for ( int y = 0; y < height; y++ )
-            {
-                for ( int x = 0; x < width; x++ )
-                {
-                    // Get pixel idx
-                    int idx = y * width + x;
-
-                    // Each pixel is an array of 4 shorts rgbg
-                    ushort * uRGBG = lrProc.imgdata.image[idx];
-                    int rowMod = ( y ) % 2; // 0 if even, 1 if odd
-                    int colMod = ( x + rowMod ) % 2; // 1 if even, 0 if odd
-                    int clrIdx = 2 * rowMod + colMod;
-                    ushort val = uRGBG[clrIdx] << 4;
-                    *itBayer++ = val;
-                }
-            }
-
-            // Get rid of libraw image, construct openCV mat
-            lrProc.recycle();
-            cv::Mat imgBayer( height, width, CV_16UC1, m_vBayerDataBuffer.data() );
-
-            // Debayer image, get output
-            cv::Mat imgDeBayer;
-            cv::cvtColor( imgBayer, imgDeBayer, CV_BayerBG2BGR );
-
-            assert( imgDeBayer.type() == CV_16UC3 );
-
-            // Convert to grey
-            cv::Mat imgGrey;
-            cv::cvtColor( imgDeBayer, imgGrey, cv::COLOR_RGB2GRAY );
-
-            // Store the image
-            std::lock_guard<std::mutex> lg( m_muCapture );
-            m_liCapturedImages.push_back( imgGrey );
         }
+
+        // Get rid of libraw image, construct openCV mat
+        lrProc.recycle();
+        cv::Mat imgBayer( height, width, CV_16UC1, m_vBayerDataBuffer.data() );
+
+        // Debayer image, get output
+        cv::Mat imgDeBayer;
+        cv::cvtColor( imgBayer, imgDeBayer, CV_BayerBG2BGR );
+
+        assert( imgDeBayer.type() == CV_16UC3 );
+
+        // Convert to grey
+        cv::Mat imgGrey;
+        cv::cvtColor( imgDeBayer, imgGrey, cv::COLOR_RGB2GRAY );
+
+        // Store the image
+        std::lock_guard<std::mutex> lg( m_muCapture );
+        m_liCapturedImages.push_back( imgGrey );
+
 
         // Sleep for a bit every iteration
         std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
     }
 }
 
+#ifdef WIN32
+// Object (usually image)  handling
 EdsError Camera::handleObjectEvent_impl( EdsUInt32			inEvent,
                                          EdsBaseRef			inRef,
                                          EdsVoid *			inContext )
 {
     switch ( inEvent )
     {
+        // Download image request, should happen in response to
+        // capture thread pressing camera button
         case kEdsObjectEvent_DirItemRequestTransfer:
         {
+            // Notify capture thread to continue
             if ( inRef )
             {
-                std::lock_guard<std::mutex> lg( m_muImageDownload );
-                m_liImagesToDownload.push_back( (EdsDirectoryItemRef) inRef );
+                m_ImgRefToDownload = inRef;
+                m_cvCamSync.notify_one();
             }
         }
             break;
 
+        // Object without the necessity is released
         default:
-            //Object without the necessity is released
             if ( inRef != NULL )
                 EdsRelease( inRef );
             break;
@@ -291,6 +300,7 @@ EdsError Camera::handleObjectEvent_impl( EdsUInt32			inEvent,
     return EDS_ERR_OK;
 }
 
+// Handle shutdown state event
 EdsError Camera::handleStateEvent_impl( EdsUInt32			inEvent,
                                         EdsUInt32			inParam,
                                         EdsVoid *			inContext )
@@ -307,6 +317,7 @@ EdsError Camera::handleStateEvent_impl( EdsUInt32			inEvent,
     return EDS_ERR_OK;
 }
 
+// Static object event handler
 /*static*/ EdsError EDSCALLBACK Camera::handleObjectEvent(
     EdsUInt32			inEvent,
     EdsBaseRef			inRef,
@@ -319,6 +330,7 @@ EdsError Camera::handleStateEvent_impl( EdsUInt32			inEvent,
     return EDS_ERR_OK;
 }
 
+// Static state event handler
 /*static*/ EdsError EDSCALLBACK Camera::handleStateEvent(
     EdsUInt32			inEvent,
     EdsUInt32			inParam,
@@ -330,3 +342,4 @@ EdsError Camera::handleStateEvent_impl( EdsUInt32			inEvent,
         return pCam->handleStateEvent_impl( inEvent, inParam, inContext );
     return EDS_ERR_OK;
 }
+#endif WIN32
