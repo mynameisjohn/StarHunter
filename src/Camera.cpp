@@ -1,21 +1,34 @@
 
-#include <libraw.h>
+#include <libraw/libraw.h>
 
 #include "Camera.h"
 
 #include <chrono>
 
-Camera::Camera() :
+void checkErr(const int retVal, std::string strName){
+    if (retVal != GP_OK){
+        std::string strErrMsg = "Error: " + strName + " failed with error code " + std::to_string(retVal);
+        throw std::runtime_error(strErrMsg);
+    }
+}
+
+
+SHCamera::SHCamera() :
+#ifdef WIN32
     m_CamRef( nullptr ),
     m_ImgRefToDownload( nullptr )
+#else
+    m_pGPContext(nullptr),
+    m_pGPCamera(nullptr)
+#endif
 {}
 
-Camera::~Camera()
+SHCamera::~SHCamera()
 {
     Finalize();
 }
 
-ImageSource::Status Camera::GetStatus() const
+ImageSource::Status SHCamera::GetStatus() const
 {
     if ( m_abCapture.load() )
     {
@@ -27,7 +40,7 @@ ImageSource::Status Camera::GetStatus() const
     return ImageSource::Status::DONE;
 }
 
-cv::Mat Camera::GetNextImage()
+cv::Mat SHCamera::GetNextImage()
 {
     cv::Mat imgRet;
 
@@ -41,7 +54,7 @@ cv::Mat Camera::GetNextImage()
     return imgRet;
 }
 
-void Camera::Initialize()
+void SHCamera::Initialize()
 {   
 #ifdef WIN32
     // Try to get camera, clean up if fail
@@ -80,10 +93,10 @@ void Camera::Initialize()
     checkErr( EdsGetDeviceInfo( camera, &deviceInfo ) );
 
     //Set Object Event Handler
-    checkErr( EdsSetObjectEventHandler( camera, kEdsObjectEvent_All, Camera::handleObjectEvent, ( EdsVoid * ) this ) );
+    checkErr( EdsSetObjectEventHandler( camera, kEdsObjectEvent_All, SHCamera::handleObjectEvent, ( EdsVoid * ) this ) );
 
     //Set State Event Handler
-    checkErr( EdsSetCameraStateEventHandler( camera, kEdsStateEvent_All, Camera::handleStateEvent, ( EdsVoid * ) this ) );
+    checkErr( EdsSetCameraStateEventHandler( camera, kEdsStateEvent_All, SHCamera::handleStateEvent, ( EdsVoid * ) this ) );
 
     m_CamRef = camera;
 
@@ -103,7 +116,18 @@ void Camera::Initialize()
     // It releases it when locked
     checkErr( EdsSendStatusCommand( m_CamRef, kEdsCameraStatusCommand_UIUnLock, 0 ) );
 #else
+    auto checkErr = [](const int retVal, std::string strName){
+        std::string strErrMsg = "Error: " + strName + " failed with error code " + std::to_string(retVal);
+        throw std::runtime_error(strErrMsg);
+    };
 
+    // gphoto2 context and camera
+    m_pGPContext = gp_context_new();
+    m_pGPCamera = nullptr;
+
+    // Create and initialize camera
+    checkErr(gp_camera_new(&m_pGPCamera), "Create Camera");
+    checkErr(gp_camera_init(m_pGPCamera, m_pGPContext), "Init Camera");
 #endif
 
     // Start capture thread
@@ -114,23 +138,31 @@ void Camera::Initialize()
     } );
 }
 
-void Camera::Finalize()
+void SHCamera::Finalize()
 {
     // Stop capture thread
     m_abCapture.store( false );
 
     m_thCapture.join();
 
+#ifdef WIN32
     // Free EDS stuff
     if ( m_ImgRefToDownload )
         EdsRelease( m_ImgRefToDownload );
     
     if ( m_CamRef )
         EdsRelease( m_CamRef );
+#else
+    // Close camera
+    gp_camera_exit(m_pGPCamera, m_pGPContext);
+
+    // What about the context?
+#endif
 }
 
-void Camera::threadProc()
+void SHCamera::threadProc()
 {
+#ifdef WIN32
     // Error check
     auto checkErr = []( EdsError e )
     {
@@ -139,8 +171,6 @@ void Camera::threadProc()
 
         throw std::runtime_error( "Error opening camera!" );
     };
-
-#ifdef WIN32
     // When using the SDK from another thread in Windows, 
     // you must initialize the COM library by calling CoInitialize 
     ::CoInitializeEx( NULL, COINIT_MULTITHREADED );
@@ -207,7 +237,17 @@ void Camera::threadProc()
         checkErr( EdsGetLength( stream, &uDataSize ) );
         checkErr( EdsGetPointer( stream, &pData ) );
 #else
+        CameraFile * pCamFile(nullptr);
+        CameraFilePath camFilePath{0};
 
+        checkErr(gp_camera_capture(m_pGPCamera, GP_CAPTURE_IMAGE, &camFilePath, m_pGPContext), "Capture");
+        checkErr(gp_file_new(&pCamFile), "Download File");
+        checkErr(gp_camera_file_get(m_pGPCamera, camFilePath.folder, camFilePath.name, GP_FILE_TYPE_NORMAL,
+                    pCamFile, m_pGPContext), "Download File");
+
+        void * pData( nullptr );
+        size_t uDataSize( 0 );
+        checkErr(gp_file_get_data_and_size(pCamFile, (const char **)&pData, &uDataSize), "Get file and data size");
 #endif // WIN32
 
         // Open the CR2 file with LibRaw, unpack, and create image
@@ -271,7 +311,7 @@ void Camera::threadProc()
 
 #ifdef WIN32
 // Object (usually image)  handling
-EdsError Camera::handleObjectEvent_impl( EdsUInt32			inEvent,
+EdsError SHCamera::handleObjectEvent_impl( EdsUInt32			inEvent,
                                          EdsBaseRef			inRef,
                                          EdsVoid *			inContext )
 {
@@ -301,7 +341,7 @@ EdsError Camera::handleObjectEvent_impl( EdsUInt32			inEvent,
 }
 
 // Handle shutdown state event
-EdsError Camera::handleStateEvent_impl( EdsUInt32			inEvent,
+EdsError SHCamera::handleStateEvent_impl( EdsUInt32			inEvent,
                                         EdsUInt32			inParam,
                                         EdsVoid *			inContext )
 {
@@ -318,7 +358,7 @@ EdsError Camera::handleStateEvent_impl( EdsUInt32			inEvent,
 }
 
 // Static object event handler
-/*static*/ EdsError EDSCALLBACK Camera::handleObjectEvent(
+/*static*/ EdsError EDSCALLBACK SHCamera::handleObjectEvent(
     EdsUInt32			inEvent,
     EdsBaseRef			inRef,
     EdsVoid *			inContext
@@ -331,7 +371,7 @@ EdsError Camera::handleStateEvent_impl( EdsUInt32			inEvent,
 }
 
 // Static state event handler
-/*static*/ EdsError EDSCALLBACK Camera::handleStateEvent(
+/*static*/ EdsError EDSCALLBACK SHCamera::handleStateEvent(
     EdsUInt32			inEvent,
     EdsUInt32			inParam,
     EdsVoid *			inContext
@@ -342,4 +382,4 @@ EdsError Camera::handleStateEvent_impl( EdsUInt32			inEvent,
         return pCam->handleStateEvent_impl( inEvent, inParam, inContext );
     return EDS_ERR_OK;
 }
-#endif WIN32
+#endif

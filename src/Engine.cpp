@@ -3,9 +3,9 @@
 #include <thread>
 #include <chrono>
 
-#include <libraw.h>
-
+#ifdef WIN32
 #include <SDL.h>
+#endif
 
 Engine::Engine( ImageSource::Ptr&& pImgSrc, ImageProcessor::Ptr&& pImgProc ) :
 	m_pImageSource( std::move( pImgSrc ) ),

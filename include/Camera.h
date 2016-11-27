@@ -9,9 +9,11 @@
 
 #ifdef WIN32
 #include "EDSDK.h"
+#else
+#include <gphoto2/gphoto2.h>
 #endif
 
-class Camera : public ImageSource
+class SHCamera : public ImageSource
 {
     std::thread m_thCapture;
     std::mutex m_muCapture;
@@ -22,13 +24,16 @@ class Camera : public ImageSource
     std::condition_variable m_cvCamSync;
     EdsDirectoryItemRef m_ImgRefToDownload;
     EdsCameraRef m_CamRef;
+#else
+    GPContext * m_pGPContext;
+    Camera * m_pGPCamera;
 #endif
 
     std::atomic_bool m_abCapture;
     std::vector<uint16_t> m_vBayerDataBuffer;
 public:
-    Camera();
-    ~Camera();
+    SHCamera();
+    ~SHCamera();
 
     ImageSource::Status GetStatus() const override;
     cv::Mat GetNextImage() override;

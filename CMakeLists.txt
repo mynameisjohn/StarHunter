@@ -48,7 +48,7 @@ IF(WIN32)
         SET(LIBRAW_LIB LibRaw.lib)
         
         # Canon EDSDK (no libgphoto2 on Windows)
-        # EDSDK needs a window, so use SDL2
+        # EDSDK needs a window, so use SDL2 as part of cam lib
         FIND_PACKAGE(SDL2)
         SET(CAM_INC_DIR $ENV{LIBDIR}/EDSDK/include ${SDL2_INCLUDE_DIR})
         SET(CAM_LIB_DIR $ENV{LIBDIR}/EDSDK/lib/${WIN_PLATFORM})

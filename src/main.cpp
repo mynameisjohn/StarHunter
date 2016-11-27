@@ -14,7 +14,7 @@ int main(int argc, char ** argv) {
     //}
 
     //pImgSrc = ImageSource::Ptr( new FileReader_WithDrift( liInput ) );
-    pImgSrc = ImageSource::Ptr( new Camera() );
+    pImgSrc = ImageSource::Ptr( new SHCamera() );
     pImgProc = ImageProcessor::Ptr( new StarFinder_ImgOffset( (FileReader_WithDrift *) pImgSrc.get() ) );
 
 	Engine E( std::move(pImgSrc), std::move(pImgProc) );
