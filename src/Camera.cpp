@@ -7,7 +7,41 @@
 
 Camera::Camera() :
     m_CamRef( nullptr )
+{}
+
+Camera::~Camera()
 {
+    Finalize();
+}
+
+ImageSource::Status Camera::GetStatus() const
+{
+    if ( m_abCapture.load() )
+    {
+        if ( m_liCapturedImages.empty() )
+            return ImageSource::Status::WAIT;
+        return ImageSource::Status::READY;
+    }
+
+    return ImageSource::Status::DONE;
+}
+
+cv::Mat Camera::GetNextImage()
+{
+    cv::Mat imgRet;
+
+    {
+        std::lock_guard<std::mutex> lg( m_muCapture );
+        if ( !m_liCapturedImages.empty() )
+            imgRet = m_liCapturedImages.front();
+        m_liCapturedImages.pop_front();
+    }
+
+    return imgRet;
+}
+
+void Camera::Initialize()
+{   
     // Try to get camera, clean up if fail
     EdsCameraListRef cameraList = nullptr;
     EdsCameraRef camera = nullptr;
@@ -44,45 +78,13 @@ Camera::Camera() :
     checkErr( EdsGetDeviceInfo( camera, &deviceInfo ) );
 
     //Set Object Event Handler
-    checkErr( EdsSetObjectEventHandler( camera, kEdsObjectEvent_All, Camera::handleObjectEvent, (EdsVoid *) this ) );
+    checkErr( EdsSetObjectEventHandler( camera, kEdsObjectEvent_All, Camera::handleObjectEvent, ( EdsVoid * ) this ) );
 
     //Set State Event Handler
-    checkErr( EdsSetCameraStateEventHandler( camera, kEdsStateEvent_All, Camera::handleStateEvent, (EdsVoid *) this ) );
-}
+    checkErr( EdsSetCameraStateEventHandler( camera, kEdsStateEvent_All, Camera::handleStateEvent, ( EdsVoid * ) this ) );
 
-Camera::~Camera()
-{
-    Finalize();
-}
+    m_CamRef = camera;
 
-ImageSource::Status Camera::GetStatus() const
-{
-    if ( m_abCapture.load() )
-    {
-        if ( m_liCapturedImages.empty() )
-            return ImageSource::Status::WAIT;
-        return ImageSource::Status::READY;
-    }
-
-    return ImageSource::Status::DONE;
-}
-
-cv::Mat Camera::GetNextImage()
-{
-    cv::Mat imgRet;
-
-    {
-        std::lock_guard<std::mutex> lg( m_muCapture );
-        if ( !m_liCapturedImages.empty() )
-            imgRet = m_liCapturedImages.front();
-        m_liCapturedImages.pop_front();
-    }
-
-    return imgRet;
-}
-
-void Camera::Initialize()
-{
     m_abCapture.store( true );
     m_thCapture = std::thread( [this]()
     {
@@ -107,21 +109,58 @@ void Camera::Finalize()
 
 void Camera::threadProc()
 {
+    EdsError err( EDS_ERR_OK );
+    auto checkErr = [&err]( EdsError rErr )
+    {
+        err = rErr;
+        if ( err == EDS_ERR_OK )
+            return;
+
+        throw std::runtime_error( "Error opening camera!" );
+    };
+
+    // When using the SDK from another thread in Windows, 
+    // you must initialize the COM library by calling CoInitialize 
+    ::CoInitializeEx( NULL, COINIT_MULTITHREADED );
+
+    //The communication with the camera begins
+    checkErr( EdsOpenSession( m_CamRef ) );
+
+    //Preservation ahead is set to PC
+    EdsUInt32 saveTo = kEdsSaveTo_Host;
+    checkErr( EdsSetPropertyData( m_CamRef, kEdsPropID_SaveTo, 0, sizeof( saveTo ), &saveTo ) );
+
+    //UI lock
+    checkErr( EdsSendStatusCommand( m_CamRef, kEdsCameraStatusCommand_UILock, 0 ) );
+
+    EdsCapacity capacity = { 0x7FFFFFFF, 0x1000, 1 };
+    checkErr( EdsSetCapacity( m_CamRef, capacity ) );
+
+    //It releases it when locked
+    checkErr( EdsSendStatusCommand( m_CamRef, kEdsCameraStatusCommand_UIUnLock, 0 ) );
+
     while ( m_abCapture.load() )
     {
         EdsError err = EDS_ERR_OK;
 
         // Press shutter to take a picture
-        err = EdsSendCommand( m_CamRef, kEdsCameraCommand_PressShutterButton, kEdsCameraCommand_ShutterButton_Completely );
-        EdsSendCommand( m_CamRef, kEdsCameraCommand_PressShutterButton, kEdsCameraCommand_ShutterButton_OFF );
-
-        //Notification of error
-        if ( err != EDS_ERR_OK )
+        try
         {
-            // We can retry if it's busy
-            if ( err != EDS_ERR_DEVICE_BUSY )
+            checkErr( EdsSendCommand( m_CamRef, kEdsCameraCommand_PressShutterButton, kEdsCameraCommand_ShutterButton_Completely ) );
+            checkErr( EdsSendCommand( m_CamRef, kEdsCameraCommand_PressShutterButton, kEdsCameraCommand_ShutterButton_OFF ) );
+        }
+
+        catch ( std::runtime_error e )
+        {
+            //Notification of error
+            if ( err != EDS_ERR_OK )
             {
-                // But otherwise something bad has happened
+                // We can retry if it's busy
+                if ( err != EDS_ERR_DEVICE_BUSY )
+                {
+                    // But otherwise something bad has happened
+                    throw std::runtime_error( "Error taking picture!" );
+                }
             }
         }
 
@@ -139,30 +178,20 @@ void Camera::threadProc()
         std::list<cv::Mat> liNewImages;
         for ( EdsDirectoryItemRef& directoryItem : liImagesToDownload )
         {
-            EdsError				err = EDS_ERR_OK;
             EdsStreamRef			stream = NULL;
 
             // Acquisition of the downloaded image information
             EdsDirectoryItemInfo	dirItemInfo;
-            err = EdsGetDirectoryItemInfo( directoryItem, &dirItemInfo );
-
+            checkErr( EdsGetDirectoryItemInfo( directoryItem, &dirItemInfo ) );
+            
             // Store in a memory stream
-            if ( err == EDS_ERR_OK )
-            {
-                 err = EdsCreateMemoryStream( dirItemInfo.size, &stream );
-            }
-
+            checkErr( EdsCreateMemoryStream( dirItemInfo.size, &stream ) );
+            
             // Download image
-            if ( err == EDS_ERR_OK )
-            {
-                err = EdsDownload( directoryItem, dirItemInfo.size, stream );
-            }
-
+            checkErr( EdsDownload( directoryItem, dirItemInfo.size, stream ) );
+            
             // Forwarding completion
-            if ( err == EDS_ERR_OK )
-            {
-                err = EdsDownloadComplete( directoryItem );
-            }
+            checkErr( EdsDownloadComplete( directoryItem ) );
 
             //Release Item
             if ( directoryItem != NULL )
@@ -174,12 +203,12 @@ void Camera::threadProc()
             // Get stream info
             void * pData( nullptr );
             EdsUInt64 uDataSize( 0 );
-            err |= EdsGetLength( stream, &uDataSize );
-            err |= EdsGetPointer( stream, &pData );
+            checkErr( EdsGetLength( stream, &uDataSize ) );
+            checkErr( EdsGetPointer( stream, &pData ) );
 
             // Open the CR2 file with LibRaw, unpack, and create image
             LibRaw lrProc;
-            assert( LIBRAW_SUCCESS == lrProc.open_file( "Lights1.nef" ) );
+            assert( LIBRAW_SUCCESS == lrProc.open_buffer( pData, uDataSize ) );
             assert( LIBRAW_SUCCESS == lrProc.unpack() );
             assert( LIBRAW_SUCCESS == lrProc.raw2image() );
 
