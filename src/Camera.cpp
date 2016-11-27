@@ -1,8 +1,9 @@
+
+#include <libraw.h>
+
 #include "Camera.h"
 
 #include <chrono>
-
-#include <libraw.h>
 
 Camera::Camera() :
     m_CamRef( nullptr )
@@ -51,17 +52,33 @@ Camera::Camera() :
 
 Camera::~Camera()
 {
-
+    Finalize();
 }
 
 ImageSource::Status Camera::GetStatus() const
 {
+    if ( m_abCapture.load() )
+    {
+        if ( m_liCapturedImages.empty() )
+            return ImageSource::Status::WAIT;
+        return ImageSource::Status::READY;
+    }
 
+    return ImageSource::Status::DONE;
 }
 
 cv::Mat Camera::GetNextImage()
 {
+    cv::Mat imgRet;
 
+    {
+        std::lock_guard<std::mutex> lg( m_muCapture );
+        if ( !m_liCapturedImages.empty() )
+            imgRet = m_liCapturedImages.front();
+        m_liCapturedImages.pop_front();
+    }
+
+    return imgRet;
 }
 
 void Camera::Initialize()
