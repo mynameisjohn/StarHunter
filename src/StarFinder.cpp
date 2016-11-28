@@ -1,6 +1,6 @@
 #include "StarFinder.h"
-#include "FnPtrHelper.h"
 #include "FileReader.h"
+#include "Util.h"
 
 #include <opencv2/opencv.hpp>
 
@@ -46,7 +46,7 @@ bool StarFinder::findStars( cv::Mat& img )
 		return false;
 
 	// So we know what we're working with here
-	if ( img.type() != CV_8UC3 )
+    if ( img.type() != CV_32F )
 		throw std::runtime_error( "Error: What kind of image is StarFinder working with?!" );
 
 	// Initialize if we haven't yet
@@ -77,9 +77,13 @@ bool StarFinder::findStars( cv::Mat& img )
     m_imgInput = img.clone();
 #endif
 
-	// Convert to greyscale float (using temp image)
-	::cvtColor( m_imgInput, m_imgTmp, CV_RGB2GRAY );
-    m_imgTmp.convertTo( m_imgInput, CV_32F, 1.f / 0xff );
+    /// Now done in Raw2Mat
+	// Convert to greyscale float if needed (using temp image)
+    //if ( m_imgInput.type() != CV_8U )
+    //{
+    //    ::cvtColor( m_imgInput, m_imgTmp, CV_RGB2GRAY );
+    //    m_imgTmp.convertTo( m_imgInput, CV_32F, 1.f / 0xff );
+    //}
 
 	// Apply gaussian filter to input to remove high frequency noise
     const double dSigma = m_fHWHM / ( ( sqrt( 2 * log( 2 ) ) ) );
@@ -330,7 +334,7 @@ StarFinder_ImgOffset::StarFinder_ImgOffset( FileReader_WithDrift * pFileReader):
 
 bool StarFinder_ImgOffset::HandleImage( cv::Mat img ) 
 { 
-    displayImage( "Offset", img );
+    // displayImage( "Offset", img );
 
     // Do default behavior
     if (StarFinder_Drift::HandleImage(img)){

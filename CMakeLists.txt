@@ -33,6 +33,9 @@ ENDIF(SH_CUDA)
 
 # Windows build settings
 IF(WIN32)
+    # this wasn't always necessary... what changed?
+    ADD_DEFINITIONS(-DWIN32=1)
+    
     # CUDA requires x64 on Windows
     IF(SH_CUDA)
         SET(WIN_PLATFORM "x64")

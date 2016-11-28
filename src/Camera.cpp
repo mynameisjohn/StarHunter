@@ -1,17 +1,23 @@
 
 #include <libraw/libraw.h>
-
-#include "Camera.h"
-
 #include <chrono>
 
-void checkErr(const int retVal, std::string strName){
-    if (retVal != GP_OK){
-        std::string strErrMsg = "Error: " + strName + " failed with error code " + std::to_string(retVal);
-        throw std::runtime_error(strErrMsg);
+#include "Util.h"
+#include "Camera.h"
+
+
+#ifdef WIN32
+
+#else
+void checkErr( const int retVal, std::string strName )
+{
+    if ( retVal != GP_OK )
+    {
+        std::string strErrMsg = "Error: " + strName + " failed with error code " + std::to_string( retVal );
+        throw std::runtime_error( strErrMsg );
     }
 }
-
+#endif
 
 SHCamera::SHCamera() :
 #ifdef WIN32
@@ -252,59 +258,12 @@ void SHCamera::threadProc()
         checkErr(gp_file_get_data_and_size(pCamFile, (const char **)&pData, &uDataSize), "Get file and data size");
 #endif // WIN32
 
-        // Open the CR2 file with LibRaw, unpack, and create image
-        LibRaw lrProc;
-        assert( LIBRAW_SUCCESS == lrProc.open_buffer( pData, uDataSize ) );
-        assert( LIBRAW_SUCCESS == lrProc.unpack() );
-        assert( LIBRAW_SUCCESS == lrProc.raw2image() );
-
-        // Get image dimensions
-        int width = lrProc.imgdata.sizes.iwidth;
-        int height = lrProc.imgdata.sizes.iheight;
-
-        // Create a buffer of ushorts containing the pixel values of the
-        // "BG Bayered" image (even rows are RGRGRG..., odd are GBGBGB...)'
-        if ( m_vBayerDataBuffer.empty() )
-            m_vBayerDataBuffer.resize( width*height );
-        else
-            std::fill( m_vBayerDataBuffer.begin(), m_vBayerDataBuffer.end(), 0 );
-
-        std::vector<uint16_t>::iterator itBayer = m_vBayerDataBuffer.begin();
-        for ( int y = 0; y < height; y++ )
-        {
-            for ( int x = 0; x < width; x++ )
-            {
-                // Get pixel idx
-                int idx = y * width + x;
-
-                // Each pixel is an array of 4 shorts rgbg
-                ushort * uRGBG = lrProc.imgdata.image[idx];
-                int rowMod = ( y ) % 2; // 0 if even, 1 if odd
-                int colMod = ( x + rowMod ) % 2; // 1 if even, 0 if odd
-                int clrIdx = 2 * rowMod + colMod;
-                ushort val = uRGBG[clrIdx] << 4;
-                *itBayer++ = val;
-            }
-        }
-
-        // Get rid of libraw image, construct openCV mat
-        lrProc.recycle();
-        cv::Mat imgBayer( height, width, CV_16UC1, m_vBayerDataBuffer.data() );
-
-        // Debayer image, get output
-        cv::Mat imgDeBayer;
-        cv::cvtColor( imgBayer, imgDeBayer, CV_BayerBG2BGR );
-
-        assert( imgDeBayer.type() == CV_16UC3 );
-
-        // Convert to grey
-        cv::Mat imgGrey;
-        cv::cvtColor( imgDeBayer, imgGrey, cv::COLOR_RGB2GRAY );
-
-        // Store the image
+        // Create cv mat from raw image and store
+        cv::Mat imgGrey = Raw2Mat( pData, uDataSize );
         std::lock_guard<std::mutex> lg( m_muCapture );
         m_liCapturedImages.push_back( imgGrey );
 
+        
 
         // Sleep for a bit every iteration
         std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );
@@ -366,7 +325,7 @@ EdsError SHCamera::handleStateEvent_impl( EdsUInt32			inEvent,
     EdsVoid *			inContext
 )
 {
-    Camera * pCam = (Camera *) inContext;
+    SHCamera * pCam = (SHCamera *) inContext;
     if ( pCam )
         return pCam->handleObjectEvent_impl( inEvent, inRef, inContext );
     return EDS_ERR_OK;
@@ -379,7 +338,7 @@ EdsError SHCamera::handleStateEvent_impl( EdsUInt32			inEvent,
     EdsVoid *			inContext
 )
 {
-    Camera * pCam = (Camera *) inContext;
+    SHCamera * pCam = (SHCamera *) inContext;
     if ( pCam )
         return pCam->handleStateEvent_impl( inEvent, inParam, inContext );
     return EDS_ERR_OK;
