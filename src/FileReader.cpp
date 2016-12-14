@@ -3,7 +3,9 @@
 
 #include <algorithm>
 
+#if SH_CAMERA
 #include <libraw/libraw.h>
+#endif
 
 ImageSource::Status FileReader::GetStatus() const
 {
@@ -27,7 +29,13 @@ img_t FileReader::GetNextImage()
         std::string strExt = strFileName.substr( ixDot + 1 );
 		if ( strExt == "png" )
 		{
+#if SH_CUDA
+			cv::Mat imgPng_h = cv::imread( strFileName );
+			img_t imgPng;
+			imgPng.upload( imgPng_h );
+#else
 			img_t imgPng = cv::imread( strFileName );
+#endif
 			if ( !imgPng.empty() )
 			{
 				img_t imgRet;
@@ -46,13 +54,15 @@ img_t FileReader::GetNextImage()
 				return imgRet;
 			}
 		}
+#if SH_CAMERA
         else if ( strExt == "cr2" )
             return Raw2Img( strFileName );
+#endif
     }
 
     // We should have handled it
     throw std::runtime_error( "Error: FileReader unable to load image!" );
-	return cv::Mat();
+	return img_t();
 }
 
 void FileReader_WithDrift::IncDriftVel( int nDriftX, int nDriftY )
@@ -88,10 +98,10 @@ void FileReader_WithDrift::GetOffset(int * pnOfsX, int * pnOfsY) const{
         *pnOfsY = m_nOfsY;
 }
 
-cv::Mat FileReader_WithDrift::GetNextImage()
+img_t FileReader_WithDrift::GetNextImage()
 {
     // Get next image
-    cv::Mat img = FileReader::GetNextImage();
+	img_t img = FileReader::GetNextImage();
 
     // Update offset value
     m_nOfsX += m_nDriftVelX;
@@ -120,13 +130,14 @@ cv::Mat FileReader_WithDrift::GetNextImage()
     rcDst.height = rcSrc.height;
 
     // Copy sub image src into zeroed out dst
-    cv::Mat ret( cv::Mat::zeros( img.size(), img.type() ) );
-    cv::Mat subImg = img( rcSrc );
+    img_t ret( cv::Mat::zeros( img.size(), img.type() ) );
+    img_t subImg = img( rcSrc );
     subImg.copyTo( ret( rcDst ) );
 	
     return ret;
 }
 
+#if SH_CAMERA
 // Convert some LibRaw object to a image type
 img_t Raw2Img_impl( LibRaw& lrProc, bool bRecycle = true )
 {
@@ -225,3 +236,4 @@ img_t Raw2Img( std::string strFileName )
 
     return Raw2Img_impl( lrProc );
 }
+#endif

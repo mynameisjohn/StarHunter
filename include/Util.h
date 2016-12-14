@@ -80,9 +80,11 @@ using cv::subtract;
 using cv::cvtColor;
 #endif
 
+#if SH_CAMERA
 // Open a raw image file, implemented in filereader.cpp
 img_t Raw2Img( void * pData, size_t uNumBytes );
 img_t Raw2Img( std::string strFileName );	
+#endif
 
 // Display image with opencv (define both cv and gpu)
 void displayImage( std::string strWindowName, cv::Mat& img );

@@ -147,7 +147,12 @@ bool StarFinder_UI::HandleImage( img_t img )
 		std::vector<Circle> vStarLocations = FindStarsInImage( fStarRadius, m_imgBoolean );
 
 		// Create copy of original input and draw circles where stars were found
+#if SH_CUDA
+		cv::Mat hHighlight;
+		img.download( hHighlight );
+#else
 		cv::Mat hHighlight = img.clone();
+#endif
 		const int nHighlightThickness = 1;
 		const cv::Scalar sHighlightColor( 0xde, 0xad, 0 );
 		

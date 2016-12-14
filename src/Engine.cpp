@@ -3,7 +3,7 @@
 #include <thread>
 #include <chrono>
 
-#ifdef WIN32
+#if SH_CAMERA && defined(WIN32)
 #include <SDL.h>
 #endif
 
@@ -18,7 +18,7 @@ void Engine::Run()
 		throw std::runtime_error( "Error: Engine not initialized" );
 
 
-#ifdef WIN32
+#if SH_CAMERA && defined(WIN32)
     SDL_Window * pWindow = SDL_CreateWindow( "fuck", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 300, 300, SDL_WINDOW_HIDDEN );
 #endif
 
@@ -33,7 +33,7 @@ void Engine::Run()
         if (st == ImgStat::WAIT)
         {
 
-#ifdef WIN32
+#if SH_CAMERA && defined(WIN32)
             SDL_Event e { 0 };
             while(SDL_PollEvent( &e ))
                 std::this_thread::sleep_for( std::chrono::milliseconds( 10 ) );
@@ -47,7 +47,7 @@ void Engine::Run()
     }
 
 
-#ifdef WIN32
+#if SH_CAMERA && defined(WIN32)
     SDL_DestroyWindow( pWindow );
 #endif
 
