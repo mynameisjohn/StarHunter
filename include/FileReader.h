@@ -14,7 +14,7 @@ public:
     FileReader( C liFileNames ) : m_liFileNames( liFileNames.begin(), liFileNames.end() ) {}
 
 	ImageSource::Status GetStatus() const override;
-	cv::Mat GetNextImage() override;
+	img_t GetNextImage() override;
 };
 
 // Like above, but a pixel offset can be applied
@@ -34,7 +34,7 @@ public:
         m_nDriftVelY( 0 )
     {}
 
-    cv::Mat GetNextImage() override;
+	img_t GetNextImage() override;
     void SetDriftVel(int pnDriftX, int pnDriftY);
     void IncDriftVel( int pnDriftX, int pnDriftY );
     void GetDriftVel( int * pnDriftX, int * pnDriftY ) const;

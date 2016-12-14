@@ -20,7 +20,7 @@ StarFinder::StarFinder() :
 	m_fIntensityThreshold( 0.25f )
 {}
 
-bool StarFinder::findStars( cv::Mat& img )
+bool StarFinder::findStars( img_t& img )
 {
 	if ( img.empty() )
 		return false;
@@ -33,7 +33,7 @@ bool StarFinder::findStars( cv::Mat& img )
 	if ( m_imgInput.empty() )
 	{
 		// Preallocate the GPU mats needed during computation
-        m_imgInput = img_t( img.size(), img.type() );
+		m_imgInput = img;
 		m_imgGaussian = img_t( img.size(), CV_32F );
 		m_imgTopHat = img_t( img.size(), CV_32F );
 		m_imgPeak = img_t( img.size(), CV_32F );
@@ -50,12 +50,13 @@ bool StarFinder::findStars( cv::Mat& img )
 #endif
 	}
 
-	// Upload input to GPU for CUDA
-#if SH_CUDA
-    m_imgInput.upload( img );
-#else
-    m_imgInput = img.clone();
-#endif
+	// I think I can just steal the reference
+//	// Upload input to GPU for CUDA
+//#if SH_CUDA
+//    m_imgInput.upload( img );
+//#else
+//    m_imgInput = img.clone();
+//#endif
 
 	int nFilterRadius = (int) ( .5f + m_fFilterRadius * m_imgInput.cols );
 	int nDilationRadius = (int) ( .5f + m_fDilationRadius * m_imgInput.cols );
@@ -98,7 +99,7 @@ bool StarFinder::findStars( cv::Mat& img )
 }
 
 // Just find the stars
-bool StarFinder::HandleImage( cv::Mat img )
+bool StarFinder::HandleImage( img_t img )
 {
 	return findStars( img );
 }
@@ -107,7 +108,7 @@ StarFinder_UI::StarFinder_UI() :
 	StarFinder()
 {}
 
-bool StarFinder_UI::HandleImage( cv::Mat img )
+bool StarFinder_UI::HandleImage( img_t img )
 {
 	// Call this once to test input and init images
 	if ( !findStars( img ) )
@@ -118,29 +119,6 @@ bool StarFinder_UI::HandleImage( cv::Mat img )
 	// Window name
 	const std::string strWindowName = "Star Finder";
 	cv::namedWindow( strWindowName, cv::WINDOW_AUTOSIZE );
-
-	//// Trackbar parameter Names
-	//std::string strGaussRadiusTBName = "Gaussian Radius";
-	//std::string strHWHMTBName = "Half-Width at Half-Maximum ";
-	//std::string strDilationRadiusTBName = "Dilation Radius";
-	//std::string strIntensityThreshTBName = "Intensity Threshold";
-
-	//// Make a util func
-
-	//// Create trackbar variables - they must be ints, and the
-	//// scale factor is to add resolution to the trackbard
-	//int nFilterRadius = nTrackBarRes * m_fFilterRadius * m_imgInput.cols;
-	//int nDilationRadius = nTrackBarRes * m_fDilationRadius * m_imgInput.cols;
-	//int nIntensityThreshold = nTrackBarRes * (int) ( m_fIntensityThreshold * m_imgInput.cols );
-	//int nFWHM = nTrackBarRes * (int) ( m_fHWHM* m_imgInput.cols );
-
-	//// We need pointers to these ints
-	//std::map<std::string, int> mapParamValues = {
-	//	{ strGaussRadiusTBName, nFilterRadius },			// These are the
-	//	{ strHWHMTBName, nFWHM },							// default values
-	//	{ strDilationRadiusTBName, nDilationRadius },		// specified in the
-	//	{ strIntensityThreshTBName, nIntensityThreshold }	// PLuTARC_testbed
-	//};
 
 	const int nTrackBarRes = 1000;
 	std::map<std::string, int> mapParamValues = {
@@ -189,18 +167,6 @@ bool StarFinder_UI::HandleImage( cv::Mat img )
 		cv::createTrackbar( strTrackBarName, strWindowName, &mapParamValues[strTrackBarName], nTrackBarRes, get_fn_ptr<0>( trackBarCallback ) );
 	cv::createTrackbar( "FWHM", strWindowName, &mapParamValues["FWHM"], 10 * nTrackBarRes, get_fn_ptr<0>( trackBarCallback ) );
 
-	//auto createTrackBar = [&mapParamValues, strWindowName, &trackBarCallback] ( std::string tbName, int maxVal ) {
-	//	auto it = mapParamValues.find( tbName );
-	//	if ( it != mapParamValues.end() )
-	//	{
-	//		cv::createTrackbar( tbName, strWindowName, &mapParamValues[tbName], maxVal, get_fn_ptr<0>( trackBarCallback ) );
-	//	}
-	//};
-	//createTrackBar( "Filter Radius", 15 * fTrackBarRes );
-	//createTrackBar( "Dilation Radius", 15 * fTrackBarRes );
-	//createTrackBar( "Intensity Threshold", 15 * fTrackBarRes );
-	//createTrackBar( "FWHM", 15 * fTrackBarRes );
-
 	// Call the callback once to initialize the window
 	trackBarCallback( 0, nullptr );
 
@@ -219,7 +185,7 @@ StarFinder_Drift::StarFinder_Drift() :
 	m_fDriftY_Cumulative( 0 )
 {}
 
-bool StarFinder_Drift::HandleImage( cv::Mat img )
+bool StarFinder_Drift::HandleImage( img_t img )
 {
 	if ( !findStars( img ) )
 		return false;
@@ -324,7 +290,7 @@ StarFinder_ImgOffset::StarFinder_ImgOffset( FileReader_WithDrift * pFileReader):
     m_pFileReader(pFileReader)
 {}
 
-bool StarFinder_ImgOffset::HandleImage( cv::Mat img ) 
+bool StarFinder_ImgOffset::HandleImage( img_t img ) 
 { 
     // displayImage( "Offset", img );
 

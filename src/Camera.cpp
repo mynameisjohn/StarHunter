@@ -46,9 +46,9 @@ ImageSource::Status SHCamera::GetStatus() const
     return ImageSource::Status::DONE;
 }
 
-cv::Mat SHCamera::GetNextImage()
+img_t SHCamera::GetNextImage()
 {
-    cv::Mat imgRet;
+	img_t imgRet;
 
     {
         std::lock_guard<std::mutex> lg( m_muCapture );

@@ -43,14 +43,14 @@ protected:
 	img_t m_imgTmp;
 
 	// Leaves bool image with star locations
-	bool findStars( cv::Mat& img );
+	bool findStars( img_t& img );
 
 public:
 	// TODO work out some algorithm parameters,
 	// it's all hardcoded nonsense right now
 	StarFinder();
 
-	bool HandleImage( cv::Mat img ) override;
+	bool HandleImage( img_t img ) override;
 
 };
 
@@ -61,7 +61,7 @@ class StarFinder_UI : public StarFinder
 {
 public:
 	StarFinder_UI();
-	bool HandleImage( cv::Mat img ) override;
+	bool HandleImage( img_t img ) override;
 };
 
 // Implementation that computes the average
@@ -81,7 +81,7 @@ class StarFinder_Drift : public StarFinder
 	std::vector<Circle> m_vLastCircles;
 public:
 	StarFinder_Drift();
-	bool HandleImage( cv::Mat img ) override;
+	bool HandleImage( img_t img ) override;
     bool GetDrift_Prev( float * pDriftX, float * pDriftY ) const;
     bool GetDrift_Cumulative( float * pDriftX, float * pDriftY ) const;
 };
@@ -96,7 +96,7 @@ class StarFinder_ImgOffset : public StarFinder_Drift
 
 public:
     StarFinder_ImgOffset( FileReader_WithDrift * pFileReader);
-    bool HandleImage( cv::Mat img ) override;
+    bool HandleImage( img_t img ) override;
 };
 
 // Finds overlapping circles and combines them

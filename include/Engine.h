@@ -16,7 +16,7 @@ public:
     };
 
 	virtual Status GetStatus() const = 0;	// Status of image stream
-	virtual cv::Mat GetNextImage() = 0;	    // Get the next image
+	virtual img_t GetNextImage() = 0;	    // Get the next image
     virtual void Initialize() {}
     virtual void Finalize() {}
 
@@ -27,7 +27,7 @@ public:
 class ImageProcessor
 {
 public:
-	virtual bool HandleImage( cv::Mat img ) = 0;	// Take an image as input
+	virtual bool HandleImage( img_t img ) = 0;	// Take an image as input
 
     virtual void Initialize() {}
 	virtual void Finalize() {}						

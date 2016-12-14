@@ -36,7 +36,7 @@ public:
     ~SHCamera();
 
     ImageSource::Status GetStatus() const override;
-    cv::Mat GetNextImage() override;
+    img_t GetNextImage() override;
     void Initialize() override;
     void Finalize() override;
 

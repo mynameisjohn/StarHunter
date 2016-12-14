@@ -10,7 +10,7 @@ ImageSource::Status FileReader::GetStatus() const
 	return m_liFileNames.empty() ? ImageSource::Status::DONE : ImageSource::Status::READY;
 }
 
-cv::Mat FileReader::GetNextImage()
+img_t FileReader::GetNextImage()
 {
     // Don't do this if done
 	if ( GetStatus() == ImageSource::Status::DONE )
