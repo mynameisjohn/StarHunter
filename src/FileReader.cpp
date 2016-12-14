@@ -137,30 +137,15 @@ img_t FileReader_WithDrift::GetNextImage()
     return ret;
 }
 
-#if SH_CAMERA
-// Convert some LibRaw object to a image type
-img_t Raw2Img_impl( LibRaw& lrProc, bool bRecycle = true )
+#ifndef SH_CUDA
+img_t GetBayerData( int width, int height, uint16_t * pData )
 {
-    // Get image dimensions
-    int width = lrProc.imgdata.sizes.iwidth;
-    int height = lrProc.imgdata.sizes.iheight;
 	int area = width * height;
 
-    // Create a buffer of ushorts containing the pixel values of the
-    // "BG Bayered" image (even rows are RGRGRG..., odd are GBGBGB...)'
-    std::vector<uint16_t> vBayerDataBuffer( area );
+	// Create a buffer of ushorts containing the pixel values of the
+	// "BG Bayered" image (even rows are RGRGRG..., odd are GBGBGB...)'
+	std::vector<uint16_t> vBayerDataBuffer( area );
 
-	// We could cache this
-    //if ( vBayerDataBuffer.empty() )
-    //    vBayerDataBuffer.resize( width*height );
-    //else
-    //    std::fill( vBayerDataBuffer.begin(), vBayerDataBuffer.end(), 0 );
-
-	// Put the data into an image
-#if SH_CUDA
-	// For CUDA, get that data onto the device
-
-#else
 	// Pull the data out of the image
 #pragma omp parallel for
 	for ( int idx = 0; idx < area; idx++ )
@@ -168,10 +153,10 @@ img_t Raw2Img_impl( LibRaw& lrProc, bool bRecycle = true )
 		// Get the color data - LibRaw gives me 4 shorts, and
 		// only one is nonzero (the bayer component I want at idx)
 		// To avoid a branch I'll just take them all
-		vBayerDataBuffer[idx] += lrProc.imgdata.image[idx][0];
-		vBayerDataBuffer[idx] += lrProc.imgdata.image[idx][1];
-		vBayerDataBuffer[idx] += lrProc.imgdata.image[idx][2];
-		vBayerDataBuffer[idx] += lrProc.imgdata.image[idx][3];
+		vBayerDataBuffer[idx] += pData[4 * idx + 0];
+		vBayerDataBuffer[idx] += pData[4 * idx + 1];
+		vBayerDataBuffer[idx] += pData[4 * idx + 2];
+		vBayerDataBuffer[idx] += pData[4 * idx + 3];
 
 		// To say this isn't a fudge factor would be a lie - I think the bit
 		// depth of my camera is 14 and I want 16, but I really don't know
@@ -190,7 +175,19 @@ img_t Raw2Img_impl( LibRaw& lrProc, bool bRecycle = true )
 
 	// Otherwise do it on the host
 	img_t imgBayer = cv::Mat( vBayerDataBuffer, CV_16UC1 ).reshape( 1, height );
+}
 #endif
+
+#if SH_CAMERA
+// Convert some LibRaw object to a image type
+img_t Raw2Img_impl( LibRaw& lrProc, bool bRecycle = true )
+{
+    // Get image dimensions
+    int width = lrProc.imgdata.sizes.iwidth;
+    int height = lrProc.imgdata.sizes.iheight;
+
+	// Get the bayered data
+	img_t imgBayer = GetBayerData( width, height, (uint16_t *) lrProc.imgdata.image );
 
 	// Get rid of libraw image if requested
 	if ( bRecycle )

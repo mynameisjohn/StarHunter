@@ -53,8 +53,8 @@ img_t SHCamera::GetNextImage()
 
     {
         std::lock_guard<std::mutex> lg( m_muCapture );
-        if ( !m_liCapturedImages.empty() )
-            imgRet = m_liCapturedImages.front();
+		if ( !m_liCapturedImages.empty() )
+			imgRet = m_liCapturedImages.front();
         m_liCapturedImages.pop_front();
     }
 
@@ -260,11 +260,9 @@ void SHCamera::threadProc()
 #endif // WIN32
 
         // Create cv mat from raw image and store
-        cv::Mat imgGrey = Raw2Img( pData, uDataSize );
+        img_t imgGrey = Raw2Img( pData, uDataSize );
         std::lock_guard<std::mutex> lg( m_muCapture );
         m_liCapturedImages.push_back( imgGrey );
-
-        
 
         // Sleep for a bit every iteration
         std::this_thread::sleep_for( std::chrono::milliseconds( 100 ) );

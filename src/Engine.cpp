@@ -17,9 +17,9 @@ void Engine::Run()
 	if ( !( m_pImageSource && m_pImageProcessor ) )
 		throw std::runtime_error( "Error: Engine not initialized" );
 
-
+	// The EDSDK needs a window to send messages to
 #if SH_CAMERA && defined(WIN32)
-    SDL_Window * pWindow = SDL_CreateWindow( "fuck", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 300, 300, SDL_WINDOW_HIDDEN );
+    SDL_Window * pWindow = SDL_CreateWindow( "EDSDK Dummy Window", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 300, 300, SDL_WINDOW_HIDDEN );
 #endif
 
     // Init image source / processor

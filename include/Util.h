@@ -61,6 +61,8 @@ make_function( T *t )
 #include <opencv2/imgproc.hpp>
 #if SH_CUDA
 using img_t = cv::cuda::GpuMat;
+#include <opencv2/cudaimgproc.hpp>
+#include <opencv2/cudaarithm.hpp>
 #else
 using img_t = cv::Mat;
 #endif

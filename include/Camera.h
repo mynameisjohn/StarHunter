@@ -19,7 +19,7 @@ class SHCamera : public ImageSource
 {
     std::thread m_thCapture;
     std::mutex m_muCapture;
-    std::list<cv::Mat> m_liCapturedImages;
+    std::list<img_t> m_liCapturedImages;
 
 #ifdef WIN32
     std::mutex m_muCamSync;

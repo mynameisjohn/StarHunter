@@ -31,6 +31,10 @@ ELSE(SH_CUDA)
     ENDIF(OPENMP_FOUND)
 ENDIF(SH_CUDA)
 
+IF(SH_CAMERA)
+    ADD_DEFINITIONS(-DSH_CAMERA=1)
+ENDIF(SH_CAMERA)
+
 # Windows build settings
 IF(WIN32)
     # this wasn't always necessary... what changed?

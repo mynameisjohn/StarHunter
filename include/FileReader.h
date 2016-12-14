@@ -41,3 +41,6 @@ public:
     void SetOffset( int nOfsX, int nOfsY );
     void GetOffset(int * pnOfsX, int * pnOfsY) const;
 };
+
+// Defined in a kernel for cuda
+img_t GetBayerData( int width, int height, uint16_t * pData );

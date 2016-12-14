@@ -1,4 +1,5 @@
 #include "StarFinder.h"
+#include "FileReader.h"
 
 // I doubt I'm using all of these...
 #include <thrust/device_ptr.h>
@@ -94,4 +95,48 @@ std::vector<Circle> FindStarsInImage( float fStarRadius, cv::cuda::GpuMat& dBool
 
 	// Return collapsed star positions
 	return vStarPos_Collapsed;
+}
+
+//struct ushort4
+//{
+//	ushort data[4];
+//};
+
+// Look at zipped pixel and index, determine if pixel is nonzero
+struct fnGetBayerData
+{
+	fnGetBayerData() {} 
+
+	__host__ __device__
+		ushort operator()( ushort4 input )
+	{
+		ushort ret( 0 );
+		ret += input.w;
+		ret += input.x;
+		ret += input.y;
+		ret += input.z;
+		ret <<= 2;
+		return ret;
+	}
+};
+
+// Keeping this here until I make a kernel file for it
+img_t GetBayerData( int width, int height, uint16_t * pData )
+{
+	int area = width * height;
+
+	// Create a thrust device vector for the input
+	thrust::device_vector<ushort4> vBayerDataBufferIn( (ushort4 *) pData, ( (ushort4 *) pData ) + area );
+
+	// Create a continuous mat for the output data
+	img_t imgBayer = cv::cuda::createContinuous( width, height, CV_16UC1 );
+
+	// Create a thrust device pointer to the output
+	thrust::device_ptr<ushort> pBayerDataOut((ushort *) imgBayer.data );
+
+	// Transform the data
+	thrust::transform( vBayerDataBufferIn.begin(), vBayerDataBufferIn.end(), pBayerDataOut, fnGetBayerData() );
+
+	// Return the output image
+	return imgBayer;
 }

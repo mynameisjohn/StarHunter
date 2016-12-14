@@ -21,7 +21,6 @@ public:
     virtual void Finalize() {}
 
 	using Ptr = std::unique_ptr<ImageSource>;
-
 };
 
 class ImageProcessor
