@@ -155,10 +155,10 @@ bool StarFinder_UI::HandleImage( cv::Mat img )
 	std::function<void( int, void * )> trackBarCallback = [&, this]( int pos, void * priv )
 	{
 		// Set parameters
-		m_fFilterRadius = mapParamValues["Filter Radius"] / nTrackBarRes;
-		m_fDilationRadius = mapParamValues["Dilation Radius"] / nTrackBarRes;
-		m_fIntensityThreshold = mapParamValues["Intensity Threshold"] / nTrackBarRes;
-		m_fHWHM = mapParamValues["FWHM"] / nTrackBarRes;
+		m_fFilterRadius = float( mapParamValues["Filter Radius"] ) / nTrackBarRes;
+		m_fDilationRadius = float( mapParamValues["Dilation Radius"] ) / nTrackBarRes;
+		m_fIntensityThreshold = float( mapParamValues["Intensity Threshold"] ) / nTrackBarRes;
+		m_fHWHM = float( mapParamValues["FWHM"] ) / nTrackBarRes;
 
 		// Find stars (results are in member images)
 		if ( findStars( img ) == false )
