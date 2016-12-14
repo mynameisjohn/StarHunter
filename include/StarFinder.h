@@ -6,13 +6,6 @@
 
 #include <opencv2/opencv.hpp>
 
-// Useful typedefs
-#if SH_CUDA
-using img_t = cv::cuda::GpuMat;
-#else
-using img_t = cv::Mat;
-#endif
-
 // Circle struct - made my
 // own so it can be constructed
 // in host and device code

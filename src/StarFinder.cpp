@@ -4,26 +4,6 @@
 
 #include <opencv2/opencv.hpp>
 
-// Display image with opencv
-void displayImage( std::string strWindowName, cv::Mat& img );
-#if SH_CUDA
-void displayImage( std::string strWindowName, cv::cuda::GpuMat& img );
-#endif
-
-#if SH_CUDA
-using cv::cuda::max;
-using cv::cuda::exp;
-using cv::cuda::threshold;
-using cv::cuda::subtract;
-using cv::cuda::cvtColor;
-#else
-using cv::max;
-using cv::exp;
-using cv::threshold;
-using cv::subtract;
-using cv::cvtColor;
-#endif
-
 // Filtering functions, defined below
 void DoGaussianFilter( const int nFilterRadius, const double dSigma, img_t& input, img_t& output );
 void DoTophatFilter( const int nFilterRadius, img_t& input, img_t& output );
@@ -77,14 +57,6 @@ bool StarFinder::findStars( cv::Mat& img )
     m_imgInput = img.clone();
 #endif
 
-    /// Now done in Raw2Mat
-	// Convert to greyscale float if needed (using temp image)
-    //if ( m_imgInput.type() != CV_8U )
-    //{
-    //    ::cvtColor( m_imgInput, m_imgTmp, CV_RGB2GRAY );
-    //    m_imgTmp.convertTo( m_imgInput, CV_32F, 1.f / 0xff );
-    //}
-
 	// Apply gaussian filter to input to remove high frequency noise
     const double dSigma = m_fHWHM / ( ( sqrt( 2 * log( 2 ) ) ) );
     DoGaussianFilter( m_nGaussianRadius, dSigma, m_imgInput, m_imgGaussian );
@@ -96,6 +68,8 @@ bool StarFinder::findStars( cv::Mat& img )
 	// Noisy areas around the peak will be negative, so threshold negative values to zero
 	::subtract( m_imgGaussian, m_imgTopHat, m_imgPeak);
 	::threshold( m_imgPeak, m_imgPeak, 0, 1, cv::THRESH_TOZERO );
+
+	displayImage( "Input", m_imgInput );
 
 	// Create a thresholded image where the lowest pixel value is m_fIntensityThreshold
 	m_imgThreshold.setTo( cv::Scalar( m_fIntensityThreshold ) );
@@ -337,9 +311,10 @@ bool StarFinder_ImgOffset::HandleImage( cv::Mat img )
     // displayImage( "Offset", img );
 
     // Do default behavior
-    if (StarFinder_Drift::HandleImage(img)){
+	if ( StarFinder_Drift::HandleImage( img ) )
+	{
         // If we have a filereader
-        if (m_pFileReader)
+		if ( m_pFileReader )
         {
             // Get drift values (returns false if < 2 images processed)
             float fDriftX(0), fDriftY(0);

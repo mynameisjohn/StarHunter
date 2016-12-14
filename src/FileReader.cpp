@@ -25,10 +25,26 @@ cv::Mat FileReader::GetNextImage()
     if ( ixDot != std::string::npos && ixDot < strFileName.size() - 1 )
     {
         std::string strExt = strFileName.substr( ixDot + 1 );
-        if ( strExt == "png" )
-            return cv::imread( m_liFileNames.front() );
+		if ( strExt == "png" )
+		{
+			img_t imgRet;
+			img_t imgPng = cv::imread( m_liFileNames.front() );
+			const double dDivFactor = 1. / ( 1 << ( 8 * imgPng.elemSize() ) );
+			if ( imgPng.channels() > 1 )
+			{
+				img_t imgPngGray;
+				::cvtColor( imgPng, imgPngGray, CV_RGB2GRAY );
+				imgPngGray.convertTo( imgRet, CV_32FC1, dDivFactor );
+			}
+			else
+			{
+				imgPng.convertTo( imgRet, CV_32FC1, dDivFactor );
+			}
+
+			return imgRet;
+		}
         else if ( strExt == "cr2" )
-            return Raw2Mat( strFileName );
+            return Raw2Img( strFileName );
     }
 
     // We should have handled it
@@ -105,64 +121,89 @@ cv::Mat FileReader_WithDrift::GetNextImage()
     cv::Mat subImg = img( rcSrc );
     subImg.copyTo( ret( rcDst ) );
 
+	displayImage( "Offset Image", ret );
+
     return ret;
 }
 
-cv::Mat Raw2Mat_impl( LibRaw& lrProc, bool bRecycle = true )
+// Convert some LibRaw object to a image type
+img_t Raw2Img_impl( LibRaw& lrProc, bool bRecycle = true )
 {
     // Get image dimensions
     int width = lrProc.imgdata.sizes.iwidth;
     int height = lrProc.imgdata.sizes.iheight;
+	int area = width * height;
 
     // Create a buffer of ushorts containing the pixel values of the
     // "BG Bayered" image (even rows are RGRGRG..., odd are GBGBGB...)'
-    std::vector<uint16_t> vBayerDataBuffer;
-    if ( vBayerDataBuffer.empty() )
-        vBayerDataBuffer.resize( width*height );
-    else
-        std::fill( vBayerDataBuffer.begin(), vBayerDataBuffer.end(), 0 );
+    std::vector<uint16_t> vBayerDataBuffer( area );
 
-    std::vector<uint16_t>::iterator itBayer = vBayerDataBuffer.begin();
-    for ( int y = 0; y < height; y++ )
-    {
-        for ( int x = 0; x < width; x++ )
-        {
-            // Get pixel idx
-            int idx = y * width + x;
+	// We could cache this
+    //if ( vBayerDataBuffer.empty() )
+    //    vBayerDataBuffer.resize( width*height );
+    //else
+    //    std::fill( vBayerDataBuffer.begin(), vBayerDataBuffer.end(), 0 );
 
-            // Each pixel is an array of 4 shorts rgbg
-            ushort * uRGBG = lrProc.imgdata.image[idx];
-            int rowMod = ( y ) % 2; // 0 if even, 1 if odd
-            int colMod = ( x + rowMod ) % 2; // 1 if even, 0 if odd
-            int clrIdx = 2 * rowMod + colMod;
-            ushort val = uRGBG[clrIdx] << 4;
-            *itBayer++ = val;
-        }
-    }
+	// Put the data into an image
+#if SH_CUDA
+	// For CUDA, get that data onto the device
 
-    // Get rid of libraw image, construct openCV mat
-    lrProc.recycle();
-    cv::Mat imgBayer( height, width, CV_16UC1, vBayerDataBuffer.data() );
+#else
+	// Pull the data out of the image
+#pragma omp parallel for
+	for ( int idx = 0; idx < area; idx++ )
+	{
+		// Get the color data - LibRaw gives me 4 shorts, and
+		// only one is nonzero (the bayer component I want at idx)
+		// To avoid a branch I'll just take them all
+		vBayerDataBuffer[idx] += lrProc.imgdata.image[idx][0];
+		vBayerDataBuffer[idx] += lrProc.imgdata.image[idx][1];
+		vBayerDataBuffer[idx] += lrProc.imgdata.image[idx][2];
+		vBayerDataBuffer[idx] += lrProc.imgdata.image[idx][3];
 
-    // Debayer image, get output
-    cv::Mat imgDeBayer;
-    cv::cvtColor( imgBayer, imgDeBayer, CV_BayerBG2BGR );
+		// To say this isn't a fudge factor would be a lie - I think the bit
+		// depth of my camera is 14 and I want 16, but I really don't know
+		vBayerDataBuffer[idx] <<= 2;
 
-    assert( imgDeBayer.type() == CV_16UC3 );
+		// Can I convert to float here? I'm not sure if cvtColor can handle it
+		// but I don't see why not, and I can debayer the image myself
+		//float fVal = vBayerDataBuffer[idx] / float( 1 << 14 );
 
-    // Convert to grey
-    cv::Mat imgGrey;
-    cv::cvtColor( imgDeBayer, imgGrey, cv::COLOR_RGB2GRAY );
+		// I wonder if I can threshold here without a branch as well
+		// If I have a 14 bit range, cutting off the last 11 bits would
+		// be equivalent to thresholding a float at 0.125f
+		//const uint16_t trunc = vBayerDataBuffer[idx] & 0xC000;
+		//const uint16_t rem = vBayerDataBuffer[idx] & 0x07ff;
+	}
+
+	// Otherwise do it on the host
+	img_t imgBayer = cv::Mat( vBayerDataBuffer, CV_16UC1 ).reshape( 1, height );
+#endif
+
+	// Get rid of libraw image if requested
+	if ( bRecycle )
+		lrProc.recycle();
+
+	// Debayer the image to 16-bit gray
+	img_t imgDeBayerGrayU16;
+	::cvtColor( imgBayer, imgDeBayerGrayU16, CV_BayerBG2GRAY );
 
     // Make normalized float
-    cv::Mat imgTmp = imgGrey; 
-    const double div = ( 1 << ( 8 * imgGrey.elemSize() ) );
-    imgTmp.convertTo( imgGrey, CV_32FC1, 1. / div );
-    
-    return imgGrey;
+	img_t imgDeBayerGrayF32;
+    const double dDivFactor= 1. / ( 1 << ( 8 * imgDeBayerGrayU16.elemSize() ) );
+	imgDeBayerGrayU16.convertTo( imgDeBayerGrayF32, CV_32FC1, dDivFactor );
+
+	// Threshold (in place?)
+	const double dThresh = .15;
+	::threshold( imgDeBayerGrayF32, imgDeBayerGrayF32, dThresh, 0, CV_THRESH_TOZERO );
+
+	//displayImage( "Test CR2", imgDeBayerGrayF32 );
+
+	// Return float image
+    return imgDeBayerGrayF32;
 }
 
-cv::Mat Raw2Mat( void * pData, size_t uNumBytes )
+img_t Raw2Img( void * pData, size_t uNumBytes )
 {
     // Open the CR2 file with LibRaw, unpack, and create image
     LibRaw lrProc;
@@ -170,10 +211,10 @@ cv::Mat Raw2Mat( void * pData, size_t uNumBytes )
     assert( LIBRAW_SUCCESS == lrProc.unpack() );
     assert( LIBRAW_SUCCESS == lrProc.raw2image() );
 
-    return Raw2Mat_impl( lrProc );
+    return Raw2Img_impl( lrProc );
 }
 
-cv::Mat Raw2Mat( std::string strFileName )
+img_t Raw2Img( std::string strFileName )
 {
     // Open the CR2 file with LibRaw, unpack, and create image
     LibRaw lrProc;
@@ -181,5 +222,5 @@ cv::Mat Raw2Mat( std::string strFileName )
     assert( LIBRAW_SUCCESS == lrProc.unpack() );
     assert( LIBRAW_SUCCESS == lrProc.raw2image() );
 
-    return Raw2Mat_impl( lrProc );
+    return Raw2Img_impl( lrProc );
 }

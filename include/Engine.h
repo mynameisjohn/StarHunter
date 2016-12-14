@@ -4,6 +4,8 @@
 
 #include <memory>
 
+#include "Util.h"
+
 class ImageSource
 {
 public:

@@ -259,7 +259,7 @@ void SHCamera::threadProc()
 #endif // WIN32
 
         // Create cv mat from raw image and store
-        cv::Mat imgGrey = Raw2Mat( pData, uDataSize );
+        cv::Mat imgGrey = Raw2Img( pData, uDataSize );
         std::lock_guard<std::mutex> lg( m_muCapture );
         m_liCapturedImages.push_back( imgGrey );
 

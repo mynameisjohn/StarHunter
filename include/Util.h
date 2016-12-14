@@ -1,5 +1,6 @@
 #pragma once
 
+// Weird thing I use to allow function pointers to std::function objects
 #include <functional>
 template <const size_t _UniqueId, typename _Res, typename... _ArgTypes>
 struct fun_ptr_helper
@@ -55,7 +56,36 @@ make_function( T *t )
 	return { t };
 }
 
-// Open a raw image file, implemented in filereader.cpp
+// Useful typedefs
 #include <opencv2/core.hpp>
-cv::Mat Raw2Mat( void * pData, size_t uNumBytes );
-cv::Mat Raw2Mat( std::string strFileName );
+#include <opencv2/imgproc.hpp>
+#if SH_CUDA
+using img_t = cv::cuda::GpuMat;
+#else
+using img_t = cv::Mat;
+#endif
+
+// We use a different cv namespace for CUDA
+#if SH_CUDA
+using cv::cuda::max;
+using cv::cuda::exp;
+using cv::cuda::threshold;
+using cv::cuda::subtract;
+using cv::cuda::cvtColor;
+#else
+using cv::max;
+using cv::exp;
+using cv::threshold;
+using cv::subtract;
+using cv::cvtColor;
+#endif
+
+// Open a raw image file, implemented in filereader.cpp
+img_t Raw2Img( void * pData, size_t uNumBytes );
+img_t Raw2Img( std::string strFileName );	
+
+// Display image with opencv (define both cv and gpu)
+void displayImage( std::string strWindowName, cv::Mat& img );
+#if SH_CUDA
+void displayImage( std::string strWindowName, cv::cuda::GpuMat& img );
+#endif
