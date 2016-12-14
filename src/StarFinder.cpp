@@ -14,8 +14,8 @@ const double kEPS = .001;
 
 StarFinder::StarFinder() :
 	// These are some good defaults
-	m_nGaussianRadius( 10 ),
-	m_nDilationRadius( 5 ),
+	m_fFilterRadius( .03f ),
+	m_fDilationRadius( .015f ),
 	m_fHWHM( 2.5f ),
 	m_fIntensityThreshold( 0.25f )
 {}
@@ -57,19 +57,20 @@ bool StarFinder::findStars( cv::Mat& img )
     m_imgInput = img.clone();
 #endif
 
+	int nFilterRadius = (int) ( .5f + m_fFilterRadius * m_imgInput.cols );
+	int nDilationRadius = (int) ( .5f + m_fDilationRadius * m_imgInput.cols );
+
 	// Apply gaussian filter to input to remove high frequency noise
     const double dSigma = m_fHWHM / ( ( sqrt( 2 * log( 2 ) ) ) );
-    DoGaussianFilter( m_nGaussianRadius, dSigma, m_imgInput, m_imgGaussian );
+    DoGaussianFilter( nFilterRadius, dSigma, m_imgInput, m_imgGaussian );
 
 	// Apply linear filter to input to magnify high frequency noise
-    DoTophatFilter( m_nGaussianRadius, m_imgInput, m_imgTopHat );
+    DoTophatFilter( nFilterRadius, m_imgInput, m_imgTopHat );
 
 	// Subtract linear filtered image from gaussian image to clean area around peak
 	// Noisy areas around the peak will be negative, so threshold negative values to zero
 	::subtract( m_imgGaussian, m_imgTopHat, m_imgPeak);
 	::threshold( m_imgPeak, m_imgPeak, 0, 1, cv::THRESH_TOZERO );
-
-	displayImage( "Input", m_imgInput );
 
 	// Create a thresholded image where the lowest pixel value is m_fIntensityThreshold
 	m_imgThreshold.setTo( cv::Scalar( m_fIntensityThreshold ) );
@@ -77,7 +78,8 @@ bool StarFinder::findStars( cv::Mat& img )
 
 	// Create the dilated image (initialize its pixels to m_fIntensityThreshold)
 	m_imgDilated.setTo( cv::Scalar( m_fIntensityThreshold ) );
-    DoDilationFilter( m_nDilationRadius, m_imgThreshold, m_imgDilated );
+	
+    DoDilationFilter( nDilationRadius, m_imgThreshold, m_imgDilated );
 
 	// Subtract the dilated image from the gaussian peak image
 	// What this leaves us with is an image where the brightest
@@ -117,34 +119,46 @@ bool StarFinder_UI::HandleImage( cv::Mat img )
 	const std::string strWindowName = "Star Finder";
 	cv::namedWindow( strWindowName, cv::WINDOW_AUTOSIZE );
 
-	// Trackbar parameter Names
-	std::string strGaussRadiusTBName = "Gaussian Radius";
-	std::string strHWHMTBName = "Half-Width at Half-Maximum ";
-	std::string strDilationRadiusTBName = "Dilation Radius";
-	std::string strIntensityThreshTBName = "Intensity Threshold";
+	//// Trackbar parameter Names
+	//std::string strGaussRadiusTBName = "Gaussian Radius";
+	//std::string strHWHMTBName = "Half-Width at Half-Maximum ";
+	//std::string strDilationRadiusTBName = "Dilation Radius";
+	//std::string strIntensityThreshTBName = "Intensity Threshold";
 
-	// We need pointers to these ints
+	//// Make a util func
+
+	//// Create trackbar variables - they must be ints, and the
+	//// scale factor is to add resolution to the trackbard
+	//int nFilterRadius = nTrackBarRes * m_fFilterRadius * m_imgInput.cols;
+	//int nDilationRadius = nTrackBarRes * m_fDilationRadius * m_imgInput.cols;
+	//int nIntensityThreshold = nTrackBarRes * (int) ( m_fIntensityThreshold * m_imgInput.cols );
+	//int nFWHM = nTrackBarRes * (int) ( m_fHWHM* m_imgInput.cols );
+
+	//// We need pointers to these ints
+	//std::map<std::string, int> mapParamValues = {
+	//	{ strGaussRadiusTBName, nFilterRadius },			// These are the
+	//	{ strHWHMTBName, nFWHM },							// default values
+	//	{ strDilationRadiusTBName, nDilationRadius },		// specified in the
+	//	{ strIntensityThreshTBName, nIntensityThreshold }	// PLuTARC_testbed
+	//};
+
+	const int nTrackBarRes = 1000;
 	std::map<std::string, int> mapParamValues = {
-		{ strGaussRadiusTBName, m_nGaussianRadius },	// These are the
-		{ strHWHMTBName, (int)m_fHWHM },			// default values
-		{ strDilationRadiusTBName, m_nDilationRadius },// specified in the
-		{ strIntensityThreshTBName, (int) ( 100.f * m_fIntensityThreshold ) } // PLuTARC_testbed
+		{ "Filter Radius", nTrackBarRes *  m_fFilterRadius  },
+		{ "Dilation Radius", nTrackBarRes *  m_fDilationRadius },
+		{ "Intensity Threshold", nTrackBarRes * m_fIntensityThreshold },
+		{ "FWHM", nTrackBarRes *  m_fHWHM }
 	};
-
-	// Scale values by resolution
-	const float fTrackBarRes = 1000.f;
-	for ( auto& itNameToParam : mapParamValues )
-		itNameToParam.second *= fTrackBarRes;
 
 	// Trackbar Callback
 	// Trackbar callback, implemented below
 	std::function<void( int, void * )> trackBarCallback = [&, this]( int pos, void * priv )
 	{
 		// Set parameters
-		m_nGaussianRadius = mapParamValues[strGaussRadiusTBName] / fTrackBarRes;
-		m_fHWHM = mapParamValues[strHWHMTBName] / fTrackBarRes;
-		m_nDilationRadius = mapParamValues[strDilationRadiusTBName] / fTrackBarRes;
-		m_fIntensityThreshold = mapParamValues[strIntensityThreshTBName] / ( 100.f*fTrackBarRes );
+		m_fFilterRadius = mapParamValues["Filter Radius"] / nTrackBarRes;
+		m_fDilationRadius = mapParamValues["Dilation Radius"] / nTrackBarRes;
+		m_fIntensityThreshold = mapParamValues["Intensity Threshold"] / nTrackBarRes;
+		m_fHWHM = mapParamValues["FWHM"] / nTrackBarRes;
 
 		// Find stars (results are in member images)
 		if ( findStars( img ) == false )
@@ -171,17 +185,21 @@ bool StarFinder_UI::HandleImage( cv::Mat img )
 	};
 
 	// Create trackbars
-	auto createTrackBar = [&mapParamValues, strWindowName, &trackBarCallback] ( std::string tbName, int maxVal ) {
-		auto it = mapParamValues.find( tbName );
-		if ( it != mapParamValues.end() )
-		{
-			cv::createTrackbar( tbName, strWindowName, &mapParamValues[tbName], maxVal, get_fn_ptr<0>( trackBarCallback ) );
-		}
-	};
-	createTrackBar( strGaussRadiusTBName, 15 * fTrackBarRes );
-	createTrackBar( strHWHMTBName, 15 * fTrackBarRes );
-	createTrackBar( strDilationRadiusTBName, 15 * fTrackBarRes );
-	createTrackBar( strIntensityThreshTBName, 15 * fTrackBarRes );
+	for ( std::string strTrackBarName : {"Filter Radius", "Dilation Radius", "Intensity Threshold"} )
+		cv::createTrackbar( strTrackBarName, strWindowName, &mapParamValues[strTrackBarName], nTrackBarRes, get_fn_ptr<0>( trackBarCallback ) );
+	cv::createTrackbar( "FWHM", strWindowName, &mapParamValues["FWHM"], 10 * nTrackBarRes, get_fn_ptr<0>( trackBarCallback ) );
+
+	//auto createTrackBar = [&mapParamValues, strWindowName, &trackBarCallback] ( std::string tbName, int maxVal ) {
+	//	auto it = mapParamValues.find( tbName );
+	//	if ( it != mapParamValues.end() )
+	//	{
+	//		cv::createTrackbar( tbName, strWindowName, &mapParamValues[tbName], maxVal, get_fn_ptr<0>( trackBarCallback ) );
+	//	}
+	//};
+	//createTrackBar( "Filter Radius", 15 * fTrackBarRes );
+	//createTrackBar( "Dilation Radius", 15 * fTrackBarRes );
+	//createTrackBar( "Intensity Threshold", 15 * fTrackBarRes );
+	//createTrackBar( "FWHM", 15 * fTrackBarRes );
 
 	// Call the callback once to initialize the window
 	trackBarCallback( 0, nullptr );

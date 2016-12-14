@@ -25,8 +25,8 @@ class StarFinder : public ImageProcessor
 {
 protected:
 	// Processing params
-	int m_nGaussianRadius;
-	int m_nDilationRadius;
+	float m_fFilterRadius;
+	float m_fDilationRadius;
 	float m_fHWHM;
 	float m_fIntensityThreshold;
 

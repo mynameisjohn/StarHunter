@@ -27,21 +27,24 @@ cv::Mat FileReader::GetNextImage()
         std::string strExt = strFileName.substr( ixDot + 1 );
 		if ( strExt == "png" )
 		{
-			img_t imgRet;
-			img_t imgPng = cv::imread( m_liFileNames.front() );
-			const double dDivFactor = 1. / ( 1 << ( 8 * imgPng.elemSize() ) );
-			if ( imgPng.channels() > 1 )
+			img_t imgPng = cv::imread( strFileName );
+			if ( !imgPng.empty() )
 			{
-				img_t imgPngGray;
-				::cvtColor( imgPng, imgPngGray, CV_RGB2GRAY );
-				imgPngGray.convertTo( imgRet, CV_32FC1, dDivFactor );
-			}
-			else
-			{
-				imgPng.convertTo( imgRet, CV_32FC1, dDivFactor );
-			}
+				img_t imgRet;
+				const double dDivFactor = 1. / ( 1 << ( 8 * imgPng.elemSize() / imgPng.channels() ) );
+				if ( imgPng.channels() > 1 )
+				{
+					img_t imgPngGray;
+					::cvtColor( imgPng, imgPngGray, CV_RGB2GRAY );
+					imgPngGray.convertTo( imgRet, CV_32FC1, dDivFactor );
+				}
+				else
+				{
+					imgPng.convertTo( imgRet, CV_32FC1, dDivFactor );
+				}
 
-			return imgRet;
+				return imgRet;
+			}
 		}
         else if ( strExt == "cr2" )
             return Raw2Img( strFileName );
@@ -120,9 +123,7 @@ cv::Mat FileReader_WithDrift::GetNextImage()
     cv::Mat ret( cv::Mat::zeros( img.size(), img.type() ) );
     cv::Mat subImg = img( rcSrc );
     subImg.copyTo( ret( rcDst ) );
-
-	displayImage( "Offset Image", ret );
-
+	
     return ret;
 }
 

@@ -10,11 +10,11 @@ int main(int argc, char ** argv) {
     std::list<std::string> liInput;
     for ( int i = 0; i < 5; i++ )
     {
-        liInput.push_back( "fakeStarImage_" + std::to_string( i ) + ".png" );
+        liInput.push_back( "fakeStarImage_" + std::to_string( i + 1 ) + ".png" );
     }
 
     pImgSrc = ImageSource::Ptr( new FileReader_WithDrift( liInput ) );
-    pImgProc = ImageProcessor::Ptr( new StarFinder_ImgOffset( (FileReader_WithDrift *) pImgSrc.get() ) );
+    pImgProc = ImageProcessor::Ptr( new StarFinder_UI() );
 
 	Engine E( std::move(pImgSrc), std::move(pImgProc) );
 	E.Run();
