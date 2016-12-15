@@ -129,7 +129,7 @@ img_t GetBayerData( int width, int height, uint16_t * pData )
 	thrust::device_vector<ushort4> vBayerDataBufferIn( (ushort4 *) pData, ( (ushort4 *) pData ) + area );
 
 	// Create a continuous mat for the output data
-	img_t imgBayer = cv::cuda::createContinuous( width, height, CV_16UC1 );
+	img_t imgBayer = cv::cuda::createContinuous( height, width, CV_16UC1 );
 
 	// Create a thrust device pointer to the output
 	thrust::device_ptr<ushort> pBayerDataOut((ushort *) imgBayer.data );
