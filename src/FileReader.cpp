@@ -140,6 +140,7 @@ img_t FileReader_WithDrift::GetNextImage()
 #ifndef SH_CUDA
 img_t GetBayerData( int width, int height, uint16_t * pData )
 {
+    // Compute area
 	int area = width * height;
 
 	// Create a buffer of ushorts containing the pixel values of the
@@ -173,8 +174,8 @@ img_t GetBayerData( int width, int height, uint16_t * pData )
 		//const uint16_t rem = vBayerDataBuffer[idx] & 0x07ff;
 	}
 
-	// Otherwise do it on the host
-	img_t imgBayer = cv::Mat( vBayerDataBuffer, CV_16UC1 ).reshape( 1, height );
+    // Construct a mat from the data and return it
+	return cv::Mat( vBayerDataBuffer, CV_16UC1 ).reshape( 1, height );
 }
 #endif
 
