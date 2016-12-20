@@ -322,6 +322,226 @@ bool StarFinder_ImgOffset::HandleImage( img_t img )
     return false;
 }
 
+#ifdef WIN32
+#include <Windows.h>
+#else
+#include <unistd.h>
+#include <stdio.h>
+#endif
+
+class TelescopeComm
+{
+    int m_nSlewRateX;
+    int m_nSlewRateY;
+    std::string m_strDeviceName;
+
+#ifdef WIN32
+    HANDLE m_pSerialPort;
+#else
+    FILE * m_pSerialPort;
+#endif
+
+    bool open();
+    bool close();
+    bool write(const char * pData, const size_t uDataSize) const;
+    std::vector<char> read(const size_t uDataSize) const;
+    std::vector<char> executeCommand(std::vector<char> vCMD) const;
+
+public:
+    TelescopeComm(std::string strDeviceName);
+    ~TelescopeComm();
+
+    void SetSlew(int nSlewRateX, int nSlewRateY); 
+    void GetSlew(int * pnSlewRateX, int * pnSlewRateY) const;
+    void GetMountPos(int * pnMountPosX, int * pnMountPosY) const;
+};
+
+TelescopeComm::TelescopeComm(std::string strDeviceName) :
+    m_nSlewRateX(0),
+    m_nSlewRateY(0),
+    m_strDeviceName(strDeviceName)
+{
+    open();
+}
+
+TelescopeComm::~TelescopeComm()
+{
+    try
+    {
+        close();
+    }
+    catch (std::runtime_error e)
+    {}
+}
+
+bool TelescopeComm::open()
+{
+    if (m_pSerialPort)
+        return true;
+
+#ifdef WIN32
+    m_pSerialPort = ::CreateFile( m_strDeviceName.c_str(),
+           GENERIC_READ|GENERIC_WRITE,  // access ( read and write)
+           0,                           // (share) 0:cannot share the
+                                        // COM port
+           0,                           // security  (None)
+           OPEN_EXISTING,               // creation : open_existing
+           FILE_FLAG_OVERLAPPED,        // we want overlapped operation
+           0                            // no templates file for
+                                        // COM port...
+           );
+#else
+
+#endif
+    if (m_pSerialPort == nullptr){
+        std::string strErrMsg = "Error! Unable to open serial port " + m_strDeviceName;
+        throw std::runtime_error(strErrMsg);
+    }
+
+    return (m_pSerialPort != nullptr);
+}
+
+bool TelescopeComm::close()
+{
+    if (m_pSerialPort == nullptr)
+        return true;
+
+#ifdef WIN32
+    if (!::CloseHandle(m_pSerialPort))
+    {
+        throw std::runtime_error("Error: Unable to close serial port!");
+        return false;
+    }
+#else
+
+#endif
+    
+    m_pSerialPort = nullptr;
+    return true;
+}
+
+bool TelescopeComm::write(const char * pData, const size_t uDataSize) const
+{
+#ifdef WIN32
+    DWORD dwWritten(0);
+    OVERLAPPED sOverlap{0};
+    if(!::WriteFile (m_pSerialPort, pData(), uDataSize, &dwWritten, &sOverlap))
+        throw std::runtime_error( "Error: Unable to write to serial port!" );
+    else if (dwWritten != vCMD.size())
+        throw std::runtime_error( "Error: Invalid # of bytes written to serial port!" );
+#else
+
+#endif 
+    return true;
+}
+
+std::vector<char> TelescopeComm::read(const size_t uDataSize) const
+{
+    std::vector<char> vRet(uDataSize);
+#ifdef WIN32
+    DWORD dwBytesRead(0);
+    OVERLAPPED ovRead{0};
+    if (!::ReadFile(m_pSerialPort, vRet.data(), uDataSize, &dwBytesRead, &ovRead))
+        throw std::runtime_error( "Error: Unable to read from serial port!" );
+    else if (dwBytesRead != uDataSize)
+        throw std::runtime_error( "Error: Invalid # of bytes read!" );
+#else
+
+#endif
+    return vRet;
+}
+
+std::vector<char> TelescopeComm::executeCommand(std::vector<char> vCMD) const
+{
+    if (write(vCMD.data(), sizeof(char) * vCMD.size()))
+    {
+        // response is one '#' character
+        std::vector<char> vResponse = read(1);
+        if (vResponse.empty())
+            throw std::runtime_error( "Error: No response from telescope!" );
+        else if (vResponse.back() != '#')
+            throw std::runtime_error( "Error: Stop byte not recieved from telescope!" );
+        return vResponse;
+    }
+    else
+        throw std::runtime_error( "Error: Unable to write data to telescope!" );
+
+    return {};
+}
+
+std::vector<char> makeVariableSlewRateCMD(int nSlewRate, bool bAlt){
+        char nSlewRate_high = (char)((4 * nSlewRate) / 256);
+        char nSlewRate_low = (char)((4 * nSlewRate) % 256);
+        return {'P', 3, char(bAlt ? 16 : 17), char(nSlewRate > 0 ? 6 : 7), nSlewRate_high, nSlewRate_low, 0, 0};
+}
+
+void TelescopeComm::SetSlew(int nSlewRateX, int nSlewRateY)
+{
+    executeCommand(makeVariableSlewRateCMD(nSlewRateX, true));
+    m_nSlewRateX = nSlewRateX;
+
+    executeCommand(makeVariableSlewRateCMD(nSlewRateY, false));
+    m_nSlewRateY = nSlewRateY;
+}
+
+void TelescopeComm::GetSlew(int * pnSlewRateX, int * pnSlewRateY) const
+{
+    if (pnSlewRateX)
+        *pnSlewRateX = m_nSlewRateX;
+    if (pnSlewRateY)
+        *pnSlewRateY = m_nSlewRateY;
+}
+
+void TelescopeComm::GetMountPos(int * pnMountPosX, int * pnMountPosY) const
+{
+    std::vector<char> vResp = executeCommand({'Z'});
+    if (vResp.size() > 1)
+    {
+        std::string strResp(vResp.begin(), vResp.end() - 1);
+
+        size_t ixComma = strResp.find(',');
+        std::string strAzm(strResp.begin(), strResp.end()+ixComma);
+        std::string strAlt(strResp.begin()+ixComma+1, strResp.end());
+
+        int nMountPosX(0), nMountPosY(0);
+        std::istringstream(strAzm) >> std::hex >> nMountPosX;
+        std::istringstream(strAlt) >> std::hex >> nMountPosY;
+
+        if (pnMountPosX)
+            *pnMountPosX = nMountPosX;
+        if (pnMountPosY)
+            *pnMountPosY = nMountPosY;
+    }
+}
+
+StarFinder_TelescopeComm::StarFinder_TelescopeComm(std::string strDeviceName) : 
+    StarFinder_Drift(),
+    m_upTelescopeComm(new TelescopeComm(strDeviceName))
+{}
+
+bool StarFinder_TelescopeComm::HandleImage(img_t img)
+{
+	if ( StarFinder_Drift::HandleImage( img ) )
+	{
+		if ( m_upTelescopeComm )
+        {
+            int nCurSlewX(0), nCurSlewY(0);
+            m_upTelescopeComm->GetSlew(&nCurSlewX, &nCurSlewY);
+            
+            // Get drift values (returns false if < 2 images processed)
+            float fDriftX(0), fDriftY(0);
+            if ( GetDrift_Prev( &fDriftX, &fDriftY ) )
+            {
+                int nSlewIncX(0), nSlewIncY(0);
+                m_upTelescopeComm->SetSlew(nCurSlewX + nSlewIncX, nCurSlewY + nSlewIncY);
+                return true;
+            }
+        }
+    }
+
+    return false;
+}
+
 void displayImage( std::string strWindowName, cv::Mat& img )
 {
 	cv::namedWindow( strWindowName, CV_WINDOW_FREERATIO );

@@ -99,6 +99,18 @@ public:
     bool HandleImage( img_t img ) override;
 };
 
+// TelescopeComm is implemented in StarFinder.cpp
+class TelescopeComm;
+class StarFinder_TelescopeComm : public StarFinder_Drift
+{
+    // Its memory is ours to manage
+    std::unique_ptr<TelescopeComm> m_upTelescopeComm;
+
+public:
+    StarFinder_TelescopeComm(std::string strDeviceName);
+    bool HandleImage( img_t img ) override;
+};
+
 // Finds overlapping circles and combines them
 std::vector<Circle> CollapseCircles( const std::vector<Circle>& vInput );
 
