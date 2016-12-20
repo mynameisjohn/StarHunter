@@ -2,6 +2,17 @@
 #include "FileReader.h"
 #include "Util.h"
 
+#ifdef WIN32
+#include <Windows.h>
+#else
+#include <unistd.h>
+#include <stdio.h>
+#include <termios.h>
+#include <errno.h>
+#include <string.h>
+#include <fcntl.h>
+#endif
+
 #include <opencv2/opencv.hpp>
 
 // Filtering functions, defined below
@@ -322,13 +333,6 @@ bool StarFinder_ImgOffset::HandleImage( img_t img )
     return false;
 }
 
-#ifdef WIN32
-#include <Windows.h>
-#else
-#include <unistd.h>
-#include <stdio.h>
-#endif
-
 class TelescopeComm
 {
     int m_nSlewRateX;
@@ -336,15 +340,15 @@ class TelescopeComm
     std::string m_strDeviceName;
 
 #ifdef WIN32
-    HANDLE m_pSerialPort;
+    HANDLE m_SerialPort;
 #else
-    FILE * m_pSerialPort;
+    int m_SerialPort;
 #endif
 
-    bool open();
-    bool close();
-    bool write(const char * pData, const size_t uDataSize) const;
-    std::vector<char> read(const size_t uDataSize) const;
+    bool openPort();
+    bool closePort();
+    bool writeToPort(const char * pData, const size_t uDataSize) const;
+    std::vector<char> readPort(const size_t uDataSize) const;
     std::vector<char> executeCommand(std::vector<char> vCMD) const;
 
 public:
@@ -359,28 +363,31 @@ public:
 TelescopeComm::TelescopeComm(std::string strDeviceName) :
     m_nSlewRateX(0),
     m_nSlewRateY(0),
-    m_strDeviceName(strDeviceName)
+    m_strDeviceName(strDeviceName),
+    m_SerialPort(0)
 {
-    open();
+    openPort();
 }
 
 TelescopeComm::~TelescopeComm()
 {
     try
     {
-        close();
+        closePort();
     }
     catch (std::runtime_error e)
     {}
 }
 
-bool TelescopeComm::open()
+bool TelescopeComm::openPort()
 {
-    if (m_pSerialPort)
+    if (m_SerialPort)
         return true;
 
+    std::string strErrMsg = "Error! Unable to open serial port " + m_strDeviceName;
+
 #ifdef WIN32
-    m_pSerialPort = ::CreateFile( m_strDeviceName.c_str(),
+    m_SerialPort = ::CreateFile( m_strDeviceName.c_str(),
            GENERIC_READ|GENERIC_WRITE,  // access ( read and write)
            0,                           // (share) 0:cannot share the
                                         // COM port
@@ -390,73 +397,88 @@ bool TelescopeComm::open()
            0                            // no templates file for
                                         // COM port...
            );
-#else
-
-#endif
-    if (m_pSerialPort == nullptr){
-        std::string strErrMsg = "Error! Unable to open serial port " + m_strDeviceName;
+    if (m_SerialPort == nullptr)
         throw std::runtime_error(strErrMsg);
-    }
+#else
+    m_SerialPort = open(m_strDeviceName.c_str(), O_RDWR | O_NOCTTY);
+    if (m_SerialPort < 0)
+        throw std::runtime_error(strErrMsg);
+#endif
 
-    return (m_pSerialPort != nullptr);
+    return (m_SerialPort != 0);
 }
 
-bool TelescopeComm::close()
+bool TelescopeComm::closePort()
 {
-    if (m_pSerialPort == nullptr)
+#ifdef WIN32
+    if (m_SerialPort == nullptr)
         return true;
 
-#ifdef WIN32
-    if (!::CloseHandle(m_pSerialPort))
+    if (!::CloseHandle(m_SerialPort))
     {
         throw std::runtime_error("Error: Unable to close serial port!");
         return false;
     }
 #else
-
+    if (m_SerialPort <= 0)
+        return true;
+    
+    if (close(m_SerialPort) < 0)
+    {
+        throw std::runtime_error("Error: Unable to close serial port!");
+        return false;
+    }
 #endif
     
-    m_pSerialPort = nullptr;
+    m_SerialPort = 0;
     return true;
 }
 
-bool TelescopeComm::write(const char * pData, const size_t uDataSize) const
+bool TelescopeComm::writeToPort(const char * pData, const size_t uDataSize) const
 {
 #ifdef WIN32
     DWORD dwWritten(0);
     OVERLAPPED sOverlap{0};
-    if(!::WriteFile (m_pSerialPort, pData(), uDataSize, &dwWritten, &sOverlap))
+    if(!::WriteFile (m_SerialPort, pData(), uDataSize, &dwWritten, &sOverlap))
         throw std::runtime_error( "Error: Unable to write to serial port!" );
     else if (dwWritten != vCMD.size())
         throw std::runtime_error( "Error: Invalid # of bytes written to serial port!" );
 #else
-
+    int nWritten = write(m_SerialPort, pData, uDataSize);
+    if (nWritten < 0)
+        throw std::runtime_error( "Error: Unable to write to serial port!" );
+    else if (nWritten < (int)uDataSize)
+        throw std::runtime_error( "Error: Invalid # of bytes written to serial port!" );
 #endif 
     return true;
 }
 
-std::vector<char> TelescopeComm::read(const size_t uDataSize) const
+std::vector<char> TelescopeComm::readPort(const size_t uDataSize) const
 {
     std::vector<char> vRet(uDataSize);
 #ifdef WIN32
     DWORD dwBytesRead(0);
     OVERLAPPED ovRead{0};
-    if (!::ReadFile(m_pSerialPort, vRet.data(), uDataSize, &dwBytesRead, &ovRead))
+    if (!::ReadFile(m_SerialPort, vRet.data(), uDataSize, &dwBytesRead, &ovRead))
         throw std::runtime_error( "Error: Unable to read from serial port!" );
     else if (dwBytesRead != uDataSize)
         throw std::runtime_error( "Error: Invalid # of bytes read!" );
 #else
-
+    int nRead = read(m_SerialPort, vRet.data(), uDataSize);
+    if (nRead < 0)
+        throw std::runtime_error( "Error: Unable to read from serial port!" );
+    else if (nRead < (int)uDataSize)
+        throw std::runtime_error( "Error: Invalid # of bytes read!" );
 #endif
     return vRet;
 }
 
 std::vector<char> TelescopeComm::executeCommand(std::vector<char> vCMD) const
 {
-    if (write(vCMD.data(), sizeof(char) * vCMD.size()))
+    if (writeToPort(vCMD.data(), sizeof(char) * vCMD.size()))
     {
         // response is one '#' character
-        std::vector<char> vResponse = read(1);
+        std::vector<char> vResponse = readPort(1);
         if (vResponse.empty())
             throw std::runtime_error( "Error: No response from telescope!" );
         else if (vResponse.back() != '#')
