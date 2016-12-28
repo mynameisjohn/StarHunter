@@ -1,5 +1,7 @@
 #pragma once
 
+#if SH_CAMERA
+
 #include "Engine.h"
 
 #include <thread>
@@ -67,3 +69,5 @@ private:
     );
 #endif
 };
+
+#endif // SH_CAMERA

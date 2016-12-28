@@ -1,3 +1,4 @@
+#if SH_CAMERA
 
 #include <libraw/libraw.h>
 #include <chrono>
@@ -344,3 +345,5 @@ EdsError SHCamera::handleStateEvent_impl( EdsUInt32			inEvent,
     return EDS_ERR_OK;
 }
 #endif
+
+#endif // SH_CAMERA

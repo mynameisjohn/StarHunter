@@ -3,7 +3,9 @@
 
 #include <algorithm>
 
+#if SH_CAMERA
 #include <libraw/libraw.h>
+#endif // SH_CAMERA
 
 ImageSource::Status FileReader::GetStatus() const
 {
@@ -27,8 +29,10 @@ cv::Mat FileReader::GetNextImage()
         std::string strExt = strFileName.substr( ixDot + 1 );
         if ( strExt == "png" )
             return cv::imread( m_liFileNames.front() );
+#if SH_CAMERA
         else if ( strExt == "cr2" )
             return Raw2Mat( strFileName );
+#endif // SH_CAMERA
     }
 
     // We should have handled it
@@ -108,6 +112,7 @@ cv::Mat FileReader_WithDrift::GetNextImage()
     return ret;
 }
 
+#if SH_CAMERA
 cv::Mat Raw2Mat_impl( LibRaw& lrProc, bool bRecycle = true )
 {
     // Get image dimensions
@@ -183,3 +188,5 @@ cv::Mat Raw2Mat( std::string strFileName )
 
     return Raw2Mat_impl( lrProc );
 }
+
+#endif // SH_CAMERA
