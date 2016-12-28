@@ -2,7 +2,7 @@ CMAKE_MINIMUM_REQUIRED(VERSION 2.8)
 
 PROJECT(StarHunter)
 
-SET(CMAKE_CXX_FLAGS "-std=c++11 -Wall")
+SET(CMAKE_CXX_FLAGS "-std=c++14 -Wall")
 
 # If on linux, make sure to use gcc-4.8
 # (cuda can't handle new gcc apparently)
@@ -107,7 +107,10 @@ IF(SH_CUDA)
 ENDIF(SH_CUDA)
 
 # Set up link directories
-LINK_DIRECTORIES(${OCV_LIB_DIR} ${LIBRAW_LIB_DIR} ${CAM_LIB_DIR})
+LINK_DIRECTORIES(
+    ${OCV_LIB_DIR} 
+    ${LIBRAW_LIB_DIR} 
+    ${CAM_LIB_DIR})
 
 # Include directories
 # those that are undefined will be blank
@@ -117,17 +120,35 @@ INCLUDE_DIRECTORIES(
     ${LIBRAW_INC_DIR}
     ${CAM_INC_DIR})
 
-# Add source files (add .cu for cuda)
+# Get cpp and header files
+FILE(GLOB SOURCE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h)
+
+# Append source files (add .cu for cuda)
 IF(SH_CUDA)
-    FILE(GLOB SOURCE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
+    FILE(GLOB SOURCE ${SOURCE}
     ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cu
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/*)
-ELSE(SH_CUDA)
-    FILE(GLOB SOURCE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/*)
+    ${CMAKE_CURRENT_SOURCE_DIR}/include/*.cuh)
 ENDIF(SH_CUDA)
+
+# If building with telescope control,
+# add pyliaison, scripts, and append include/lib
+IF(SH_TELESCOPE)
+    # Add subdir
+    add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/pyl)
+    # Add scripts to source
+    FILE(GLOB SOURCE ${SOURCE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/*)
+    # include python and pyl
+    INCLUDE_DIRECTORIES(
+        ${CMAKE_CURRENT_SOURCE_DIR}/pyl
+        ${PYTHON_INCLUDE_DIR})
+    # link against python
+    LINK_DIRECTORIES(${PYTHON_LIB_DIR})
+    SET(SH_LIBS ${SH_LIBS} PyLiaison ${PYTHON_LIBRARY})
+    # Add definition
+    ADD_DEFINITIONS(-DSH_TELESCOPE=1)
+ENDIF(SH_TELESCOPE)
 
 # Add regular or cuda executable
 IF(SH_CUDA)
