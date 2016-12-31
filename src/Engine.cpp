@@ -19,7 +19,7 @@ void Engine::Run()
 
 	// The EDSDK needs a window to send messages to
 #if SH_CAMERA && defined(WIN32)
-    SDL_Window * pWindow = SDL_CreateWindow( "EDSDK Dummy Window", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 300, 300, SDL_WINDOW_HIDDEN );
+    SDL_Window * pWindow = SDL_CreateWindow( "EDSDK Dummy Window", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 300, 300, SDL_WINDOW_SHOWN );
 #endif
 
     // Init image source / processor
@@ -27,25 +27,30 @@ void Engine::Run()
     m_pImageProcessor->Initialize();
 
     // Iterate over all images
+	bool bQuitFlag( false );
     using ImgStat = ImageSource::Status;
-    for ( ImgStat st = m_pImageSource->GetStatus(); st != ImgStat::DONE; st = m_pImageSource->GetStatus())
+	img_t img;
+    for ( ImgStat st = m_pImageSource->GetNextImage( &img ); st != ImgStat::DONE && !bQuitFlag; m_pImageSource->GetNextImage( &img ) )
     {
         if (st == ImgStat::WAIT)
         {
-
 #if SH_CAMERA && defined(WIN32)
             SDL_Event e { 0 };
-            while(SDL_PollEvent( &e ))
-                std::this_thread::sleep_for( std::chrono::milliseconds( 10 ) );
+			while ( SDL_PollEvent( &e ) )
+			{
+				if ( e.type == SDL_KEYUP && e.key.keysym.sym == SDLK_ESCAPE )
+				{
+					bQuitFlag = true;
+				}
+			}
 #endif
 
             std::this_thread::sleep_for(std::chrono::milliseconds(10));
         }
         else if (st == ImgStat::READY){
-            m_pImageProcessor->HandleImage(m_pImageSource->GetNextImage());
+			m_pImageProcessor->HandleImage( img );
         }
     }
-
 
 #if SH_CAMERA && defined(WIN32)
     SDL_DestroyWindow( pWindow );

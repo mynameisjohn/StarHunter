@@ -1,9 +1,16 @@
 #include "StarFinder.h"
 #include "FileReader.h"
-#include "TelescopeComm.h"
 #include "Util.h"
 
 #include <opencv2/opencv.hpp>
+
+#ifdef max
+#undef max
+#endif
+
+#ifdef min
+#undef min
+#endif
 
 // Filtering functions, defined below
 void DoGaussianFilter( const int nFilterRadius, const double dSigma, img_t& input, img_t& output );
@@ -59,8 +66,8 @@ bool StarFinder::findStars( img_t& img )
 //    m_imgInput = img.clone();
 //#endif
 
-	int nFilterRadius = (int) ( .5f + m_fFilterRadius * m_imgInput.cols );
-	int nDilationRadius = (int) ( .5f + m_fDilationRadius * m_imgInput.cols );
+	int nFilterRadius = std::min<int>( 15, ( .5f + m_fFilterRadius * m_imgInput.cols ) );
+	int nDilationRadius = std::min<int>( 15, ( .5f + m_fDilationRadius * m_imgInput.cols ) );
 
 	// Apply gaussian filter to input to remove high frequency noise
 	const double dSigma = m_fHWHM / ( ( sqrt( 2 * log( 2 ) ) ) );
@@ -323,6 +330,9 @@ bool StarFinder_ImgOffset::HandleImage( img_t img )
 	return false;
 }
 
+#ifdef SH_TELESCOPE
+#include "TelescopeComm.h"
+
 StarFinder_TelescopeComm::StarFinder_TelescopeComm( std::string strDeviceName ) :
 	StarFinder_Drift(),
 	m_upTelescopeComm( new TelescopeComm( strDeviceName ) )
@@ -350,6 +360,7 @@ bool StarFinder_TelescopeComm::HandleImage( img_t img )
 
 	return false;
 }
+#endif
 
 void displayImage( std::string strWindowName, cv::Mat& img )
 {

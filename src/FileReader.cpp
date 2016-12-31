@@ -7,17 +7,11 @@
 #include <libraw/libraw.h>
 #endif
 
-ImageSource::Status FileReader::GetStatus() const
+ImageSource::Status FileReader::GetNextImage( img_t * pImg )
 {
-	return m_liFileNames.empty() ? ImageSource::Status::DONE : ImageSource::Status::READY;
-}
+	if ( m_liFileNames.empty() )
+		return ImageSource::Status::DONE;
 
-img_t FileReader::GetNextImage()
-{
-    // Don't do this if done
-	if ( GetStatus() == ImageSource::Status::DONE )
-		throw std::runtime_error( "Error: FileReader has no more images!" );
-	
     // Get the first file name and pop it off
     std::string strFileName = std::move( m_liFileNames.front() );
 	m_liFileNames.pop_front();
@@ -51,18 +45,22 @@ img_t FileReader::GetNextImage()
 					imgPng.convertTo( imgRet, CV_32FC1, dDivFactor );
 				}
 
-				return imgRet;
+				*pImg = imgRet;
+				return Status::READY;
 			}
 		}
 #if SH_CAMERA
-        else if ( strExt == "cr2" )
-            return Raw2Img( strFileName );
+		else if ( strExt == "cr2" )
+		{
+			*pImg = Raw2Img( strFileName );
+			return Status::READY;
+		}
 #endif
     }
 
     // We should have handled it
     throw std::runtime_error( "Error: FileReader unable to load image!" );
-	return img_t();
+	return Status::DONE;
 }
 
 void FileReader_WithDrift::IncDriftVel( int nDriftX, int nDriftY )
@@ -98,18 +96,23 @@ void FileReader_WithDrift::GetOffset(int * pnOfsX, int * pnOfsY) const{
         *pnOfsY = m_nOfsY;
 }
 
-img_t FileReader_WithDrift::GetNextImage()
+ImageSource::Status FileReader_WithDrift::GetNextImage( img_t * pImg )
 {
     // Get next image
-	img_t img = FileReader::GetNextImage();
+	img_t img;
+	if ( FileReader::GetNextImage( &img ) == Status::DONE )
+		return Status::DONE;
 
     // Update offset value
     m_nOfsX += m_nDriftVelX;
     m_nOfsY += m_nDriftVelY;
 
     // Return if no offset
-    if ( !( m_nOfsX || m_nOfsY ) )
-        return img;
+	if ( !( m_nOfsX || m_nOfsY ) )
+	{
+		*pImg = img;
+		return Status::READY;
+	}
     
     // std::cout << m_nOfsX << ", " << m_nOfsY << std::endl;
 
@@ -134,7 +137,8 @@ img_t FileReader_WithDrift::GetNextImage()
     img_t subImg = img( rcSrc );
     subImg.copyTo( ret( rcDst ) );
 	
-    return ret;
+	*pImg = ret;
+    return Status::READY;
 }
 
 #ifndef SH_CUDA

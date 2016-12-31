@@ -15,17 +15,20 @@ public:
         DONE
     };
 
-	virtual Status GetStatus() const = 0;	// Status of image stream
-	virtual img_t GetNextImage() = 0;	    // Get the next image
+	virtual Status GetNextImage( img_t * pImg ) = 0;
     virtual void Initialize() {}
     virtual void Finalize() {}
 
 	using Ptr = std::unique_ptr<ImageSource>;
+
+	virtual ~ImageSource() {}
 };
 
 class ImageProcessor
 {
 public:
+	virtual ~ImageProcessor() {}
+
 	virtual bool HandleImage( img_t img ) = 0;	// Take an image as input
 
     virtual void Initialize() {}

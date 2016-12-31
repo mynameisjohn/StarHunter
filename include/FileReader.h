@@ -9,12 +9,11 @@ class FileReader : public ImageSource
 {
 	std::list<std::string> m_liFileNames;
 public:
-	//FileReader( std::initializer_list<std::string> liFileNames );
+	//FileReader( std::initializer_list<std::string> liFileNames ) : m_liFileNames( liFileNames ) {}
     template<typename C>
     FileReader( C liFileNames ) : m_liFileNames( liFileNames.begin(), liFileNames.end() ) {}
 
-	ImageSource::Status GetStatus() const override;
-	img_t GetNextImage() override;
+	ImageSource::Status GetNextImage( img_t * pImg ) override;
 };
 
 // Like above, but a pixel offset can be applied
@@ -34,7 +33,7 @@ public:
         m_nDriftVelY( 0 )
     {}
 
-	img_t GetNextImage() override;
+	ImageSource::Status GetNextImage( img_t * pImg ) override;
     void SetDriftVel(int pnDriftX, int pnDriftY);
     void IncDriftVel( int pnDriftX, int pnDriftY );
     void GetDriftVel( int * pnDriftX, int * pnDriftY ) const;
