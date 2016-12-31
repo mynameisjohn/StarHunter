@@ -79,6 +79,8 @@ private:
 	int m_nImageCaptureLimit;
 	int m_nImagesCaptured;
 
+	int m_nShutterDuration;
+
 	// The captured images written to disk
 	// will be named with this prefix
 	std::string m_strImgCapturePrefix;
@@ -89,7 +91,7 @@ private:
 #endif
 
 public:
-	SHCamera( std::string strNamePrefix, int nImagesToCapture );
+	SHCamera( std::string strNamePrefix, int nImagesToCapture, int nShutterDuration );
     ~SHCamera();
 
 	// Getter and setter for camera mode

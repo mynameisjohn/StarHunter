@@ -20,11 +20,12 @@ void checkErr( const int retVal, std::string strName )
 }
 #endif
 
-SHCamera::SHCamera( std::string strNamePrefix, int nImagesToCapture ) :
+SHCamera::SHCamera( std::string strNamePrefix, int nImagesToCapture, int nShutterDuration ) :
 	m_eMode( Mode::Off ),
 	m_strImgCapturePrefix( strNamePrefix ),
 	m_nImageCaptureLimit( nImagesToCapture ),
-	m_nImagesCaptured(0)
+	m_nImagesCaptured( 0 ),
+	m_nShutterDuration( nShutterDuration )
 #ifndef WIN32
 	m_pGPContext( nullptr ),
 	m_pGPCamera( nullptr )
@@ -454,7 +455,7 @@ bool SHCamera::handleCapturedImage( EdsDirectoryItemRef inRef )
 
 	// Enqueue the next take picture command if still capturing
 	if ( GetMode() == Mode::Capturing )
-		m_CMDQueue.push_back( new TakePictureCommand( m_pCamModel.get() ) );
+		m_CMDQueue.push_back( new TakePictureCommand( m_pCamModel.get(), m_nShutterDuration ) );
 
 	return true;
 }

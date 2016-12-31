@@ -118,8 +118,14 @@ bool TakePictureCommand::execute()
 	EdsError err = EDS_ERR_OK;
 	bool	 locked = false;
 
-	//Taking a picture
+	// Press shutter button
 	err = EdsSendCommand( _model->getCameraObject(), kEdsCameraCommand_PressShutterButton, kEdsCameraCommand_ShutterButton_Completely );
+
+	// If we have a shutter duration specified, sleep for that amount
+	if ( m_nShutterDurationInSeconds > 0 )
+		std::this_thread::sleep_for( std::chrono::seconds( m_nShutterDurationInSeconds ) );
+
+	// Release shutter button
 	EdsSendCommand( _model->getCameraObject(), kEdsCameraCommand_PressShutterButton, kEdsCameraCommand_ShutterButton_OFF );
 
 	//Notification of error

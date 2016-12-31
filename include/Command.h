@@ -311,8 +311,10 @@ private:
 
 class TakePictureCommand : public Command
 {
+	// (for shutter bulb mode)
+	int m_nShutterDurationInSeconds;
 public:
-	TakePictureCommand( CameraModel *model ) : Command( model ) {}
+	TakePictureCommand( CameraModel *model, int nShutterDur = -1 ) : Command( model ), m_nShutterDurationInSeconds( nShutterDur ) {}
 	bool execute() override;
 };
 
