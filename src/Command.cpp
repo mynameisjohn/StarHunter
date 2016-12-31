@@ -1,3 +1,5 @@
+#ifdef SH_CAMERA
+
 #include <libraw/libraw.h>
 
 #include "Command.h"
@@ -527,5 +529,7 @@ void CommandQueue::waitTillCompletion()
 		bSpin = !m_liCommands.empty();
 	}
 }
+
+#endif
 
 #endif

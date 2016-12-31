@@ -581,5 +581,4 @@ bool SHCamera::handleEvfImage()
 }
 
 #endif
-
 #endif

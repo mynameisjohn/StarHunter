@@ -51,7 +51,6 @@ void Engine::Run()
 			m_pImageProcessor->HandleImage( img );
         }
     }
-
 #if SH_CAMERA && defined(WIN32)
     SDL_DestroyWindow( pWindow );
 #endif

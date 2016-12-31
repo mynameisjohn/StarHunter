@@ -111,7 +111,7 @@ public:
     bool HandleImage( img_t img ) override;
 };
 
-#ifdef SH_TELESCOPE
+#if defined(SH_TELESCOPE) && defined(SH_CAMERA)
 // This EDS camera impl will have to allow for the same CMD pattern used by the app
 #include "Camera.h"
 #include "TelescopeComm.h"

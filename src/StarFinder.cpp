@@ -330,7 +330,7 @@ bool StarFinder_ImgOffset::HandleImage( img_t img )
 	return false;
 }
 
-#ifdef SH_TELESCOPE
+#if defined(SH_TELESCOPE) && defined(SH_CAMERA)
 #include "TelescopeComm.h"
 
 StarFinder_TelescopeComm::StarFinder_TelescopeComm( std::string strDeviceName ) :
@@ -345,14 +345,14 @@ bool StarFinder_TelescopeComm::HandleImage( img_t img )
 		if ( m_upTelescopeComm )
 		{
 			int nCurSlewX( 0 ), nCurSlewY( 0 );
-			m_upTelescopeComm->GetSlew( &nCurSlewX, &nCurSlewY );
+			m_upTelescopeComm->GetSlewRate( &nCurSlewX, &nCurSlewY );
 
 			// Get drift values (returns false if < 2 images processed)
 			float fDriftX( 0 ), fDriftY( 0 );
 			if ( GetDrift_Prev( &fDriftX, &fDriftY ) )
 			{
 				int nSlewIncX( 0 ), nSlewIncY( 0 );
-				m_upTelescopeComm->SetSlew( nCurSlewX + nSlewIncX, nCurSlewY + nSlewIncY );
+				m_upTelescopeComm->SetSlewRate( nCurSlewX + nSlewIncX, nCurSlewY + nSlewIncY );
 				return true;
 			}
 		}

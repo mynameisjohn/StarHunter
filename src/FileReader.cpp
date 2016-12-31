@@ -5,7 +5,7 @@
 
 #if SH_CAMERA
 #include <libraw/libraw.h>
-#endif
+#endif // SH_CAMERA
 
 ImageSource::Status FileReader::GetNextImage( img_t * pImg )
 {
