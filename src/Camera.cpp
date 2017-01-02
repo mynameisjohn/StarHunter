@@ -42,6 +42,7 @@ ImageSource::Status SHCamera::GetNextImage( img_t * pImg )
 {
     {
 		std::lock_guard<std::mutex> lg( m_muCapture );
+		//std::cout << m_liCapturedImages.size() << std::endl;
 		if ( !m_liCapturedImages.empty() )
 		{
 			*pImg = m_liCapturedImages.front();
@@ -542,6 +543,10 @@ bool SHCamera::handleEvfImage()
 			// Lock mutex, post image
 			{
 				std::lock_guard<std::mutex> lg( m_muCapture );
+
+				// Pop off oldest 10 from front
+				if ( m_liCapturedImages.size() > 10 )
+					m_liCapturedImages.erase( m_liCapturedImages.begin(), std::next( m_liCapturedImages.begin(), 10 ) );
 #if SH_CUDA
 				img_t imgUpload;
 				imgUpload.upload( avgImg );

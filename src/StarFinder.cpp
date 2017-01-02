@@ -38,7 +38,6 @@ bool StarFinder::findStars( img_t& img )
 	if ( m_imgInput.empty() )
 	{
 		// Preallocate the GPU mats needed during computation
-		m_imgInput = img;
 		m_imgGaussian = img_t( img.size(), CV_32F );
 		m_imgTopHat = img_t( img.size(), CV_32F );
 		m_imgPeak = img_t( img.size(), CV_32F );
@@ -54,6 +53,9 @@ bool StarFinder::findStars( img_t& img )
 		m_imgBoolean = img_t( img.size(), CV_8U );
 #endif
 	}
+	
+	// Work with copy of original
+	m_imgInput = img.clone();
 
 	// I think I can just steal the reference
 //	// Upload input to GPU for CUDA
