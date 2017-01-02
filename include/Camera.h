@@ -117,16 +117,16 @@ private:
     void threadProc();
 
 #ifdef WIN32
-    EdsError handleObjectEvent_impl( EdsUInt32			inEvent,
+    EdsError EDSCALLBACK handleObjectEvent_impl( EdsUInt32			inEvent,
                                      EdsBaseRef			inRef,
                                      EdsVoid *			inContext );
-    EdsError handleStateEvent_impl(
+    EdsError EDSCALLBACK handleStateEvent_impl(
         EdsUInt32			inEvent,
         EdsUInt32			inParam,
         EdsVoid *			inContext
     );
 
-	EdsError handlePropertyEvent_impl(
+	EdsError EDSCALLBACK handlePropertyEvent_impl(
 		EdsUInt32			inEvent,
 		EdsUInt32			inPropertyID,
 		EdsUInt32			inParam,
