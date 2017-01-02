@@ -40,13 +40,11 @@ SHCamera::~SHCamera()
 
 ImageSource::Status SHCamera::GetNextImage( img_t * pImg )
 {
-	img_t imgRet;
-
     {
 		std::lock_guard<std::mutex> lg( m_muCapture );
 		if ( !m_liCapturedImages.empty() )
 		{
-			imgRet = m_liCapturedImages.front();
+			*pImg = m_liCapturedImages.front();
 			m_liCapturedImages.pop_front();
 			return Status::READY;
 		}
@@ -126,9 +124,6 @@ void SHCamera::Initialize()
 		new OpenSessionCommand( m_pCamModel.get() ),
 		new GetPropertyCommand( m_pCamModel.get(), kEdsPropID_ProductName )
 	} ) );
-
-	// Turn us on? 
-	SetMode( Mode::Streaming );
 
 #else
     auto checkErr = [](const int retVal, std::string strName){
@@ -523,9 +518,7 @@ bool SHCamera::handleEvfImage()
 					// Convert to single channel float
 					cv::Mat imgGrey;
 					cv::cvtColor( matImg, imgGrey, CV_BGR2GRAY );
-					matImg.convertTo( matImg, CV_32FC3, 1.f / 0xFF );
-
-					// 
+					imgGrey.convertTo( matImg, CV_32FC1, 1.f / 0xFF );
 
 					if ( nImages > 1 )
 						m_liImageStack.emplace_back( std::move( matImg ) );

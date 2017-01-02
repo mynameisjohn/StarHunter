@@ -37,6 +37,12 @@ TelescopeComm::TelescopeComm(std::string strDevice)
     }
 }
 
+TelescopeComm::~TelescopeComm()
+{
+    // Same thing here - maybe a ref count?
+    //pyl::finalize();
+}
+
 // Call slewVariable twice on the implementation
 // for the alt and azm directions (NOP if no change)
 void TelescopeComm::SetSlewRate(int alt, int azm)
