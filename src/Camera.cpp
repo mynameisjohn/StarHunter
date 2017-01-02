@@ -520,8 +520,12 @@ bool SHCamera::handleEvfImage()
 					// in BGR, but the images kept coming up black
 					cv::cvtColor( matImg, matImg, CV_BGR2RGB );
 
-					// 3 channel float (should be single)
+					// Convert to single channel float
+					cv::Mat imgGrey;
+					cv::cvtColor( matImg, imgGrey, CV_BGR2GRAY );
 					matImg.convertTo( matImg, CV_32FC3, 1.f / 0xFF );
+
+					// 
 
 					if ( nImages > 1 )
 						m_liImageStack.emplace_back( std::move( matImg ) );

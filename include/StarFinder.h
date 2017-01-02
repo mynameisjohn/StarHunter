@@ -116,26 +116,43 @@ public:
 #include "Camera.h"
 #include "TelescopeComm.h"
 
-class StarHunter
-{
-	// Our input is a camera
-	// Will send either VF or real img input to star finder
-	SHCamera m_Camera;
+//class StarHunter
+//{
+//	// Our input is a camera
+//	// Will send either VF or real img input to star finder
+//	SHCamera m_Camera;
+//
+//	// Get incoming drift values from the star finder
+//	StarFinder_Drift m_StarFinder;
+//
+//	// This will receive slew rate CMDs given drift vals
+//	// The value will have to be adjusted until error goes to zero
+//	TelescopeComm m_TelescopeComm;
+//
+//	enum class State
+//	{
+//		DETECT = 0,	// No movement, scanning input for velocity
+//		CALIBRATE,	// Finding a good velocity value
+//		TRACK,		// Moving at good velocity, hopefully no change needed
+//		DONE
+//	};
+//
+//	State m_eState;
+//
+//	void Run()
+//	{
+//		m_Camera = SHCamera( "fuck", 10, 10 );
+//		m_StarFinder = StarFinder_Drift;
+//		m_TelescopeComm = TelescopeComm( "COM3" );
+//
+//		m_eState = State::DETECT;
+//		while ( m_eState != State::DONE )
+//		{
+//			
+//		}
+//	}
+//};
 
-	// Get incoming drift values from the star finder
-	StarFinder_Drift m_StarFinder;
-
-	// This will receive slew rate CMDs given drift vals
-	// The value will have to be adjusted until error goes to zero
-	TelescopeComm m_TelescopeComm;
-
-	enum class State
-	{
-		DETECT = 0,	// No movement, scanning input for velocity
-		CALIBRATE,	// Finding a good velocity value
-		TRACK		// Moving at good velocity, hopefully no change needed
-	};
-};
 #endif
 
 // Finds overlapping circles and combines them

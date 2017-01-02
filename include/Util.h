@@ -82,6 +82,9 @@ using cv::subtract;
 using cv::cvtColor;
 #endif
 
+// Arbitrarily small number
+const double kEPS = .001;
+
 #if SH_CAMERA
 // Open a raw image file, implemented in filereader.cpp
 img_t Raw2Img( void * pData, size_t uNumBytes );

@@ -16,7 +16,6 @@ class TelescopeComm
 public:
 
     TelescopeComm(std::string strDevice);
-    ~TelescopeComm();
 
     void SetSlewRate(int alt, int azm);
     void GetSlewRate(int * pAlt, int * pAzm);

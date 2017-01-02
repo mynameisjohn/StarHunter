@@ -17,10 +17,6 @@ TelescopeComm::TelescopeComm(std::string strDevice)
 {
     try
     {
-        // Init interpreter
-        // TODO Don't re-initialize - add a flag / refcount
-        pyl::initialize();
-
         // Get the TelescopeComm module
         auto obTelMod = pyl::Object::from_script("TelescopeComm.py");
 
@@ -35,17 +31,10 @@ TelescopeComm::TelescopeComm(std::string strDevice)
     {
         // Print error, close interpreter
         std::cout << e.what() << std::endl;
-        pyl::finalize();
 
         // Pass it along to the client
-        throw std::runtime_error(e.what());
+		throw e;
     }
-}
-
-TelescopeComm::~TelescopeComm()
-{
-    // Same thing here - maybe a ref count?
-    pyl::finalize();
 }
 
 // Call slewVariable twice on the implementation

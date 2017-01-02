@@ -17,9 +17,6 @@ void DoGaussianFilter( const int nFilterRadius, const double dSigma, img_t& inpu
 void DoTophatFilter( const int nFilterRadius, img_t& input, img_t& output );
 void DoDilationFilter( const int nFilterRadius, img_t& input, img_t& output );
 
-// Arbitrarily small number
-const double kEPS = .001;
-
 StarFinder::StarFinder() :
 	// These are some good defaults
 	m_fFilterRadius( .03f ),
