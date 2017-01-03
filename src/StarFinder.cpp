@@ -334,6 +334,7 @@ bool StarFinder_ImgOffset::HandleImage( img_t img )
 	return false;
 }
 
+#if SH_CAMERA && SH_TELESCOPE
 bool StarHunter::Run()
 {
 	try
@@ -450,9 +451,8 @@ StarHunter::StarHunter( SHCamera * pCamera, TelescopeComm * pTelescopeComm, Star
 	m_upCamera( pCamera ),
 	m_upTelescopeComm( pTelescopeComm ),
 	m_upStarFinder( pStarFinder )
-{
-
-}
+{}
+#endif // SH_CAMERA && SH_TELESCOPE
 
 void displayImage( std::string strWindowName, cv::Mat& img )
 {

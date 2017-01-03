@@ -10,6 +10,7 @@
 
 int main(int argc, char ** argv) 
 {
+	// Use the StarHunter code if we have both telescope and camera stuff
 #if SH_CAMERA && SH_TELESCOPE
 	StarHunter SH( new SHCamera( "test", 10, 10 ), new TelescopeComm( "COM3" ), new StarFinder_Drift() );
 	if ( SH.Run() )
