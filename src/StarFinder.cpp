@@ -2,10 +2,14 @@
 #include "FileReader.h"
 #include "Util.h"
 
+#if SH_CAMERA
 #include "Camera.h"
-#include "TelescopeComm.h"
+#endif // SH_CAMERA
 
+#if SH_TELESCOPE
+#include "TelescopeComm.h"
 #include <pyliaison.h>
+#endif // SH_TELESCOPE
 
 #include <opencv2/opencv.hpp>
 
