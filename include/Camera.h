@@ -9,7 +9,7 @@
 #include <atomic>
 #include <condition_variable>
 
-#ifdef WIN32
+#if USE_EDSDK
 #include "EDSDK.h"
 
 #include <mutex>
@@ -25,8 +25,10 @@
 #include <gphoto2/gphoto2.h>
 #endif
 
+#define USE_EDSDK WIN32
+
 class SHCamera : public ImageSource
-#ifdef WIN32
+#if USE_EDSDK
 	, public DownloadEvfCommand::Receiver
 	, public DownloadCommand::Receiver
 #endif
@@ -52,7 +54,23 @@ private:
 	// the capturing is done (img limit hit)
     std::list<img_t> m_liCapturedImages;
 
-#ifdef WIN32
+	// Camera mode, can be accessed
+	// and modified from threads so
+	// protected by a mutex
+	std::mutex m_muCamMode;
+	Mode m_eMode;
+
+	// The capture mode will write images to disk and
+	// return the WAIT status from GetNextImage until
+	// a predetermined number of images are captured
+	int m_nImageCaptureLimit;
+	int m_nImagesCaptured;
+	int m_nShutterDuration;
+
+	// The captured images written to disk
+	// will be named with this prefix
+	std::string m_strImgCapturePrefix;
+#if USE_EDSDK
 	// A pointer to the camera model object
 	// This owns the EDSDK reference to the camera
 	// and fields the get/setProperty callbacks
@@ -61,29 +79,13 @@ private:
 	// We use a thread safe command queue
 	// to control the camera
 	CommandQueue m_CMDQueue;
-
-	// Camera mode, can be accessed
-	// and modified from threads so
-	// protected by a mutex
-	std::mutex m_muCamMode;
-	Mode m_eMode;
 	
 	// The streaming code takes an average
 	// of the incoming frames - the images
 	// being averaged are stored here
 	std::list<cv::Mat> m_liImageStack;
 
-	// The capture mode will write images to disk and
-	// return the WAIT status from GetNextImage until
-	// a predetermined number of images are captured
-	int m_nImageCaptureLimit;
-	int m_nImagesCaptured;
 
-	int m_nShutterDuration;
-
-	// The captured images written to disk
-	// will be named with this prefix
-	std::string m_strImgCapturePrefix;
 
 #else
     GPContext * m_pGPContext;
@@ -103,11 +105,13 @@ public:
     void Initialize() override;
     void Finalize() override;
 
+#if USE_EDSDK
 	// EVF receiver override, posts to main thread
 	bool handleEvfImage() override;
 
 	// Captured image handler, downloads to disk
 	bool handleCapturedImage( EdsDirectoryItemRef dirItem ) override;
+#endif
 
 private:
 
@@ -116,7 +120,7 @@ private:
 	// and exits when the mode transitions to off
     void threadProc();
 
-#ifdef WIN32
+#if USE_EDSDK
     EdsError EDSCALLBACK handleObjectEvent_impl( EdsUInt32			inEvent,
                                      EdsBaseRef			inRef,
                                      EdsVoid *			inContext );

@@ -57,8 +57,9 @@ make_function( T *t )
 }
 
 // Useful typedefs
-#include <opencv2/core.hpp>
+#include <opencv2/opencv.hpp>
 #include <opencv2/imgproc.hpp>
+
 #if SH_CUDA
 using img_t = cv::cuda::GpuMat;
 #include <opencv2/cudaimgproc.hpp>

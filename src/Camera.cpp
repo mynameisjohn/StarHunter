@@ -6,8 +6,7 @@
 #include "Util.h"
 #include "Camera.h"
 
-
-#ifdef WIN32
+#if USE_EDSDK
 
 #else
 void checkErr( const int retVal, std::string strName )
@@ -26,7 +25,7 @@ SHCamera::SHCamera( std::string strNamePrefix, int nImagesToCapture, int nShutte
 	m_nImageCaptureLimit( nImagesToCapture ),
 	m_nImagesCaptured( 0 ),
 	m_nShutterDuration( nShutterDuration )
-#ifndef WIN32
+#ifndef USE_EDSDK
 	m_pGPContext( nullptr ),
 	m_pGPCamera( nullptr )
 #endif
@@ -62,7 +61,7 @@ void SHCamera::Initialize()
 	// Make sure we've wrapped up
 	Finalize();
 
-#ifdef WIN32
+#if USE_EDSDK
     // Try to get camera, clean up if fail
     EdsCameraListRef cameraList = nullptr;
     EdsCameraRef camera = nullptr;
@@ -146,7 +145,7 @@ void SHCamera::Initialize()
 
 void SHCamera::Finalize()
 {
-#ifdef WIN32
+#if USE_EDSDK
 	// Let the CMD queue finish
 	m_CMDQueue.waitTillCompletion();
 	m_CMDQueue.clear( true );
@@ -168,6 +167,7 @@ void SHCamera::Finalize()
 
 void SHCamera::SetMode( Mode mode )
 {
+#if USE_EDSDK
 	// We may start the thread if we're
 	// switching from off to somthing else
 	bool bStartThread( false );
@@ -232,6 +232,7 @@ void SHCamera::SetMode( Mode mode )
 			threadProc();
 		} );
 	}
+#endif
 }
 
 SHCamera::Mode SHCamera::GetMode()
@@ -242,14 +243,16 @@ SHCamera::Mode SHCamera::GetMode()
 
 void SHCamera::threadProc()
 {
-#ifdef WIN32
+#if USE_EDSDK && WIN32
 	// When using the SDK from another thread in Windows, 
 	// you must initialize the COM library by calling CoInitialize 
 	::CoInitializeEx( NULL, COINIT_MULTITHREADED );
+#endif
 
 	// Continue until we get switched off
 	for ( Mode eCurMode = GetMode(); eCurMode != Mode::Off; eCurMode = GetMode() )
 	{
+#if USE_EDSDK
 		std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
 		auto pCMD = m_CMDQueue.pop();
 		if ( pCMD )
@@ -260,14 +263,7 @@ void SHCamera::threadProc()
 				m_CMDQueue.push_back( pCMD.release() );
 			}
 		}
-	}
-
-	// Close the command queue when the thread exits
-	m_CMDQueue.clear( true );
 #else
-	bool bRunning_tl = m_abRunning.load();
-	while ( bRunning_tl )
-	{
 		CameraFile * pCamFile( nullptr );
 		CameraFilePath camFilePath { 0 };
 
@@ -279,13 +275,16 @@ void SHCamera::threadProc()
 		void * pData( nullptr );
 		size_t uDataSize( 0 );
 		checkErr( gp_file_get_data_and_size( pCamFile, (const char **) &pData, &uDataSize ), "Get file and data size" );
-		bRunning_tl = m_abRunning.load();
+#endif
 	}
-}
+
+#if USE_EDSDK
+	// Close the command queue when the thread exits
+	m_CMDQueue.clear( true );
 #endif
 }
 
-#ifdef WIN32
+#if USE_EDSDK
 // Object (usually image)  handling
 EdsError SHCamera::handleObjectEvent_impl( EdsUInt32			inEvent,
                                          EdsBaseRef			inRef,
