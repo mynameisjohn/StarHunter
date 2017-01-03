@@ -179,6 +179,7 @@ void SHCamera::SetMode( Mode mode )
 		if ( m_eMode == mode )
 			return;
 
+		// Init if we're off
 		bStartThread = ( m_eMode == Mode::Off );
 
 		// Handle mode transition
@@ -192,9 +193,6 @@ void SHCamera::SetMode( Mode mode )
 				m_CMDQueue.push_back( new CloseSessionCommand( m_pCamModel.get() ) );
 				break;
 			case Mode::Streaming:
-				//// Init if we're off
-				//if ( m_eMode == Mode::Off )
-				//	bStartThread = true;
 				// Post a start EVF command and an initial download command
 				m_CMDQueue.push_back( new CompositeCommand( m_pCamModel.get(), {
 					new StartEvfCommand( m_pCamModel.get() ),
@@ -204,12 +202,13 @@ void SHCamera::SetMode( Mode mode )
 				} ) );
 				break;
 			case Mode::Capturing:
-				// Init if we're off
-				//if ( m_eMode == Mode::Off )
-				//	bStartThread = true;
+				
 				// End streaming if necessary
 				if ( m_eMode == Mode::Streaming )
 					m_CMDQueue.push_back( new EndEvfCommand( m_pCamModel.get() ) );
+
+				// Push back initial take picture command
+				m_CMDQueue.push_back( new TakePictureCommand( m_pCamModel.get(), m_nShutterDuration ) );
 				break;
 			default:
 				return;

@@ -2,6 +2,11 @@
 #include "FileReader.h"
 #include "Util.h"
 
+#include "Camera.h"
+#include "TelescopeComm.h"
+
+#include <pyliaison.h>
+
 #include <opencv2/opencv.hpp>
 
 #ifdef max
@@ -329,37 +334,125 @@ bool StarFinder_ImgOffset::HandleImage( img_t img )
 	return false;
 }
 
-#if defined(SH_TELESCOPE) && defined(SH_CAMERA)
-#include "TelescopeComm.h"
-
-StarFinder_TelescopeComm::StarFinder_TelescopeComm( std::string strDeviceName ) :
-	StarFinder_Drift(),
-	m_upTelescopeComm( new TelescopeComm( strDeviceName ) )
-{}
-
-bool StarFinder_TelescopeComm::HandleImage( img_t img )
+bool StarHunter::Run()
 {
-	if ( StarFinder_Drift::HandleImage( img ) )
+	try
 	{
-		if ( m_upTelescopeComm )
-		{
-			int nCurSlewX( 0 ), nCurSlewY( 0 );
-			m_upTelescopeComm->GetSlewRate( &nCurSlewX, &nCurSlewY );
+		pyl::initialize();
 
-			// Get drift values (returns false if < 2 images processed)
+		// Detect, then calibrate, then track, then get out
+		for ( m_eState = State::NONE; m_eState != State::DONE;)
+		{
+			// Variable declarations
+			img_t img;
 			float fDriftX( 0 ), fDriftY( 0 );
-			if ( GetDrift_Prev( &fDriftX, &fDriftY ) )
+			int nSlewRateX( 0 ), nSlewRateY( 0 );
+			ImageSource::Status eImgStat = ImageSource::Status::READY;
+
+			switch ( m_eState )
 			{
-				int nSlewIncX( 0 ), nSlewIncY( 0 );
-				m_upTelescopeComm->SetSlewRate( nCurSlewX + nSlewIncX, nCurSlewY + nSlewIncY );
-				return true;
+				// Initially set camera mode to streaming, set state to detect, and break
+				case State::NONE:
+					m_upCamera->Initialize();
+					m_upCamera->SetMode( SHCamera::Mode::Streaming );
+					m_eState = State::DETECT;
+					break;
+
+					// During the detect phase, we call GetNextImage on the camera
+					// and send it to the star finder. Eventually the sf will get
+					// a drift value, at which point we start calibrating
+				case State::DETECT:
+					// Get an image from the camera
+					eImgStat = m_upCamera->GetNextImage( &img );
+					if ( eImgStat == ImageSource::Status::READY )
+						m_upStarFinder->HandleImage( img );
+					else
+						break;
+
+					std::cout << "Trying to detect stars in image..." << std::endl;
+
+					// This will return true once there are things with drift detected
+					if ( m_upStarFinder->GetDrift_Cumulative( &fDriftX, &fDriftY ) )
+					{
+						// Switch to calibration state
+						std::cout << "Stars detected in input! moving on to calibration" << std::endl;
+						m_eState = State::CALIBRATE;
+						break;
+					}
+					break;
+
+					// The calibration state will change the slew rate of the
+					// telescope mount until the drift values go below some threshold
+				case State::CALIBRATE:
+					// Get an image from the camera
+					eImgStat = m_upCamera->GetNextImage( &img );
+					if ( eImgStat == ImageSource::Status::READY )
+						m_upStarFinder->HandleImage( img );
+					else
+						break;
+
+					// Get the current drift value (this shouldn't return false...)
+					if ( m_upStarFinder->GetDrift_Cumulative( &fDriftX, &fDriftY ) )
+					{
+						std::cout << "Calibrating with drift value of " << fDriftX << ", " << fDriftX << std::endl;
+
+						bool bX = fabs( fDriftX ) < kEPS;
+						bool bY = fabs( fDriftY ) < kEPS;
+
+						// If these are both below the threshold, set state to track
+						if ( bX && bY )
+						{
+							std::cout << "Calibration complete! Stars are now being tracked" << std::endl;
+							m_eState = State::TRACK;
+							m_upCamera->SetMode( SHCamera::Mode::Capturing );
+							break;
+						}
+
+#if SH_TELESCOPE
+						// Otherwise compute increments (1 in the direction of drift)
+						m_upTelescopeComm->GetSlewRate( &nSlewRateX, &nSlewRateY );
+						if ( bX )
+							nSlewRateX += fDriftX > 0 ? 1 : -1;
+						if ( bY )
+							nSlewRateY += fDriftY > 0 ? 1 : -1;
+
+						// Set slew rate
+						m_upTelescopeComm->SetSlewRate( nSlewRateX, nSlewRateY );
+#endif
+					}
+					break;
+
+					// Not much for us to do in the tracking state, we are just
+					// making the camera take images and storing them
+				case State::TRACK:
+					// This will return DONE when the camera is out of images
+					if ( m_upCamera->GetNextImage( &img ) == ImageSource::Status::DONE )
+					{
+						m_eState = State::DONE;
+						m_upCamera->SetMode( SHCamera::Mode::Off );
+					}
+					break;
 			}
 		}
+
+		pyl::finalize();
+	}
+	catch ( std::runtime_error& e )
+	{
+		std::cout << e.what() << std::endl;
+		return false;
 	}
 
-	return false;
+	return true;
 }
-#endif
+
+StarHunter::StarHunter( SHCamera * pCamera, TelescopeComm * pTelescopeComm, StarFinder_Drift * pStarFinder ) :
+	m_upCamera( pCamera ),
+	m_upTelescopeComm( pTelescopeComm ),
+	m_upStarFinder( pStarFinder )
+{
+
+}
 
 void displayImage( std::string strWindowName, cv::Mat& img )
 {

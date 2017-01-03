@@ -99,61 +99,34 @@ public:
     bool HandleImage( img_t img ) override;
 };
 
-// TelescopeComm is implemented in StarFinder.cpp
-class TelescopeComm;
-class StarFinder_TelescopeComm : public StarFinder_Drift
-{
-    // Its memory is ours to manage
-    std::unique_ptr<TelescopeComm> m_upTelescopeComm;
+#if SH_TELESCOPE && SH_CAMERA
 
+class SHCamera;
+class TelescopeComm;
+class StarHunter
+{
 public:
-    StarFinder_TelescopeComm(std::string strDeviceName);
-    bool HandleImage( img_t img ) override;
+	// We'll use a state pattern here to try and get things done
+	enum class State
+	{
+		NONE = 0,
+		DETECT,		// No movement, scanning input for velocity
+		CALIBRATE,	// Finding a good velocity value
+		TRACK,		// Moving at good velocity, hopefully no change needed
+		DONE		// We're all done
+	};
+
+	StarHunter( SHCamera * pCamera, TelescopeComm * pTelescopeComm, StarFinder_Drift * pStarFinder );
+	bool Run();
+
+private:
+	State m_eState;
+	std::unique_ptr<SHCamera> m_upCamera;
+	std::unique_ptr<TelescopeComm> m_upTelescopeComm;
+	std::unique_ptr<StarFinder_Drift> m_upStarFinder;
 };
 
-#if defined(SH_TELESCOPE) && defined(SH_CAMERA)
-// This EDS camera impl will have to allow for the same CMD pattern used by the app
-#include "Camera.h"
-#include "TelescopeComm.h"
-
-//class StarHunter
-//{
-//	// Our input is a camera
-//	// Will send either VF or real img input to star finder
-//	SHCamera m_Camera;
-//
-//	// Get incoming drift values from the star finder
-//	StarFinder_Drift m_StarFinder;
-//
-//	// This will receive slew rate CMDs given drift vals
-//	// The value will have to be adjusted until error goes to zero
-//	TelescopeComm m_TelescopeComm;
-//
-//	enum class State
-//	{
-//		DETECT = 0,	// No movement, scanning input for velocity
-//		CALIBRATE,	// Finding a good velocity value
-//		TRACK,		// Moving at good velocity, hopefully no change needed
-//		DONE
-//	};
-//
-//	State m_eState;
-//
-//	void Run()
-//	{
-//		m_Camera = SHCamera( "fuck", 10, 10 );
-//		m_StarFinder = StarFinder_Drift;
-//		m_TelescopeComm = TelescopeComm( "COM3" );
-//
-//		m_eState = State::DETECT;
-//		while ( m_eState != State::DONE )
-//		{
-//			
-//		}
-//	}
-//};
-
-#endif
+#endif // SH_TELESCOPE && SH_CAMERA
 
 // Finds overlapping circles and combines them
 std::vector<Circle> CollapseCircles( const std::vector<Circle>& vInput );
