@@ -59,11 +59,18 @@ SDLGLWindow::~SDLGLWindow()
 		SDL_DestroyWindow( m_pWindow );
 	if ( m_GLContext )
 		SDL_GL_DeleteContext( m_GLContext );
+	m_pWindow = nullptr;
+	m_GLContext = nullptr;
 }
 
 SDL_Window * SDLGLWindow::GetWindow() const
 {
 	return m_pWindow;
+}
+
+SDL_GLContext SDLGLWindow::GetContext() const
+{
+	return m_GLContext;
 }
 
 SDLGLWindow::Updater::Updater( SDL_Window * pW ) :
