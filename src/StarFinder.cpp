@@ -346,11 +346,6 @@ bool StarFinder_ImgOffset::HandleImage( img_t img )
 
 #if SH_CAMERA && SH_TELESCOPE
 
-#include "ImageTextureWindow.h"
-
-#include <pyliaison.h>
-#include <SDL.h>
-
 bool StarHunter::Run()
 {
 	try
