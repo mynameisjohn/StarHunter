@@ -6,7 +6,7 @@
 #include "Util.h"
 #include "Camera.h"
 
-#if USE_EDSDK
+#if SH_USE_EDSDK
 
 #else
 void checkErr( const int retVal, std::string strName )
@@ -25,7 +25,7 @@ SHCamera::SHCamera( std::string strNamePrefix, int nImagesToCapture, int nShutte
 	m_nImageCaptureLimit( nImagesToCapture ),
 	m_nImagesCaptured( 0 ),
 	m_nShutterDuration( nShutterDuration )
-#ifndef USE_EDSDK
+#ifndef SH_USE_EDSDK
 	m_pGPContext( nullptr ),
 	m_pGPCamera( nullptr )
 #endif
@@ -61,7 +61,7 @@ void SHCamera::Initialize()
 	// Make sure we've wrapped up
 	Finalize();
 
-#if USE_EDSDK
+#if SH_USE_EDSDK
     // Try to get camera, clean up if fail
     EdsCameraListRef cameraList = nullptr;
     EdsCameraRef camera = nullptr;
@@ -145,7 +145,7 @@ void SHCamera::Initialize()
 
 void SHCamera::Finalize()
 {
-#if USE_EDSDK
+#if SH_USE_EDSDK
 	// Let the CMD queue finish
 	m_CMDQueue.waitTillCompletion();
 	m_CMDQueue.clear( true );
@@ -167,7 +167,7 @@ void SHCamera::Finalize()
 
 void SHCamera::SetMode( Mode mode )
 {
-#if USE_EDSDK
+#if SH_USE_EDSDK
 	// We may start the thread if we're
 	// switching from off to somthing else
 	bool bStartThread( false );
@@ -243,7 +243,7 @@ SHCamera::Mode SHCamera::GetMode()
 
 void SHCamera::threadProc()
 {
-#if USE_EDSDK && WIN32
+#if SH_USE_EDSDK && WIN32
 	// When using the SDK from another thread in Windows, 
 	// you must initialize the COM library by calling CoInitialize 
 	::CoInitializeEx( NULL, COINIT_MULTITHREADED );
@@ -252,7 +252,7 @@ void SHCamera::threadProc()
 	// Continue until we get switched off
 	for ( Mode eCurMode = GetMode(); eCurMode != Mode::Off; eCurMode = GetMode() )
 	{
-#if USE_EDSDK
+#if SH_USE_EDSDK
 		std::this_thread::sleep_for( std::chrono::milliseconds( 1 ) );
 		auto pCMD = m_CMDQueue.pop();
 		if ( pCMD )
@@ -278,13 +278,13 @@ void SHCamera::threadProc()
 #endif
 	}
 
-#if USE_EDSDK
+#if SH_USE_EDSDK
 	// Close the command queue when the thread exits
 	m_CMDQueue.clear( true );
 #endif
 }
 
-#if USE_EDSDK
+#if SH_USE_EDSDK
 // Object (usually image)  handling
 EdsError SHCamera::handleObjectEvent_impl( EdsUInt32			inEvent,
                                          EdsBaseRef			inRef,

@@ -9,7 +9,7 @@
 #include <atomic>
 #include <condition_variable>
 
-#if USE_EDSDK
+#if SH_USE_EDSDK
 #include "EDSDK.h"
 
 #include <mutex>
@@ -25,10 +25,8 @@
 #include <gphoto2/gphoto2.h>
 #endif
 
-#define USE_EDSDK WIN32
-
 class SHCamera : public ImageSource
-#if USE_EDSDK
+#if SH_USE_EDSDK
 	, public DownloadEvfCommand::Receiver
 	, public DownloadCommand::Receiver
 #endif
@@ -70,7 +68,7 @@ private:
 	// The captured images written to disk
 	// will be named with this prefix
 	std::string m_strImgCapturePrefix;
-#if USE_EDSDK
+#if SH_USE_EDSDK
 	// A pointer to the camera model object
 	// This owns the EDSDK reference to the camera
 	// and fields the get/setProperty callbacks
@@ -105,7 +103,7 @@ public:
     void Initialize() override;
     void Finalize() override;
 
-#if USE_EDSDK
+#if SH_USE_EDSDK
 	// EVF receiver override, posts to main thread
 	bool handleEvfImage() override;
 
@@ -120,7 +118,7 @@ private:
 	// and exits when the mode transitions to off
     void threadProc();
 
-#if USE_EDSDK
+#if SH_USE_EDSDK
     EdsError EDSCALLBACK handleObjectEvent_impl( EdsUInt32			inEvent,
                                      EdsBaseRef			inRef,
                                      EdsVoid *			inContext );
