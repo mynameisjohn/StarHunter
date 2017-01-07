@@ -118,12 +118,13 @@ public:
 		DONE		// We're all done
 	};
 
-	StarHunter( SHCamera * pCamera, TelescopeComm * pTelescopeComm, StarFinder_Drift * pStarFinder );
+	StarHunter( int nImagesTillSlew, SHCamera * pCamera, TelescopeComm * pTelescopeComm, StarFinder_Drift * pStarFinder );
 	~StarHunter();
 	bool Run();
 
 private:
 	State m_eState;
+	int m_nImagesPerSlewCMD;
 	std::unique_ptr<SHCamera> m_upCamera;
 	std::unique_ptr<TelescopeComm> m_upTelescopeComm;
 	std::unique_ptr<StarFinder_Drift> m_upStarFinder;

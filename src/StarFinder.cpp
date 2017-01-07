@@ -362,6 +362,9 @@ bool StarHunter::Run()
 		// Init pyliaison
 		pyl::initialize();
 
+		// Declare slew cmd counter
+		int nImagesTillSlewCMD = 0;
+
 		// Detect, then calibrate, then track, then get out
 		for ( m_eState = State::NONE; m_eState != State::DONE;)
 		{
@@ -372,7 +375,7 @@ bool StarHunter::Run()
 			ImageSource::Status eImgStat = ImageSource::Status::READY;
 
 			// Pump input, allow exit
-#if SH_USE_ESDK
+#if SH_USE_EDSDK
 			SDL_Event e { 0 };
 			while ( SDL_PollEvent( &e ) )
 			{
@@ -447,12 +450,18 @@ bool StarHunter::Run()
 						}
 
 #if SH_TELESCOPE
-						// Otherwise compute increments (1 in the direction of drift)
-						m_upTelescopeComm->GetSlewRate( &nSlewRateX, &nSlewRateY );
-						if ( !bX )
-							nSlewRateX += fDriftX > 0 ? 1 : -1;
-						if ( !bY )
-							nSlewRateY += fDriftY > 0 ? 1 : -1;
+						// Increment the slew CMD counter, send a command if we've hit it
+						if ( ++nImagesTillSlewCMD % m_nImagesPerSlewCMD == 0 )
+						{
+							// Otherwise compute increments (1 in the direction of drift)
+							m_upTelescopeComm->GetSlewRate( &nSlewRateX, &nSlewRateY );
+							if ( !bX )
+								nSlewRateX += fDriftX > 0 ? 1 : -1;
+							if ( !bY )
+								nSlewRateY += fDriftY > 0 ? 1 : -1;
+
+							nImagesTillSlewCMD = 0;
+						}
 
 						// Set slew rate
 						m_upTelescopeComm->SetSlewRate( nSlewRateX, nSlewRateY );
@@ -495,7 +504,8 @@ bool StarHunter::Run()
 	return true;
 }
 
-StarHunter::StarHunter( SHCamera * pCamera, TelescopeComm * pTelescopeComm, StarFinder_Drift * pStarFinder ) :
+StarHunter::StarHunter( int nImagesTillSlew, SHCamera * pCamera, TelescopeComm * pTelescopeComm, StarFinder_Drift * pStarFinder ) :
+	m_nImagesPerSlewCMD( std::max( 1, nImagesTillSlew ) ),
 	m_upCamera( pCamera ),
 	m_upTelescopeComm( pTelescopeComm ),
 	m_upStarFinder( pStarFinder )
