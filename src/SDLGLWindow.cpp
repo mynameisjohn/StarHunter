@@ -16,7 +16,7 @@ SDLGLWindow::SDLGLWindow( std::string strName, int posX, int posY, int width, in
 								posY,
 								width,
 								height,
-								flags );
+								flags | SDL_WINDOW_OPENGL );
 
 	SDL_GL_SetAttribute( SDL_GL_CONTEXT_MAJOR_VERSION, glMajor );
 	SDL_GL_SetAttribute( SDL_GL_CONTEXT_MINOR_VERSION, glMinor );

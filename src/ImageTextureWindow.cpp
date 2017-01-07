@@ -2,7 +2,6 @@
 #include "ImageTextureWindow.h"
 #include <glm/gtc/type_ptr.hpp>
 
-
 ImageTextureWindow::ImageTextureWindow( std::string strName, int posX, int posY, int width, int height, int flags,
 										int glMajor, int glMinor, bool bDoubleBuf,
 										std::string strVertShader, std::string strFragShader,

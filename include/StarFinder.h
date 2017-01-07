@@ -103,6 +103,8 @@ public:
 
 class SHCamera;
 class TelescopeComm;
+class ImageTextureWindow;
+
 class StarHunter
 {
 public:
@@ -117,6 +119,7 @@ public:
 	};
 
 	StarHunter( SHCamera * pCamera, TelescopeComm * pTelescopeComm, StarFinder_Drift * pStarFinder );
+	~StarHunter();
 	bool Run();
 
 private:
@@ -124,6 +127,10 @@ private:
 	std::unique_ptr<SHCamera> m_upCamera;
 	std::unique_ptr<TelescopeComm> m_upTelescopeComm;
 	std::unique_ptr<StarFinder_Drift> m_upStarFinder;
+
+#if SH_USE_EDSDK
+	std::unique_ptr<ImageTextureWindow> m_upTextureWindow;
+#endif
 };
 
 #endif // SH_TELESCOPE && SH_CAMERA

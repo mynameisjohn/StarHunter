@@ -4,12 +4,18 @@
 
 #if SH_CAMERA
 #include "Camera.h"
+#include <SDL.h>
 #endif // SH_CAMERA
 
 #if SH_TELESCOPE
 #include "TelescopeComm.h"
 #include <pyliaison.h>
 #endif // SH_TELESCOPE
+
+#if SH_CAMERA && SH_TELESCOPE
+#include "ImageTextureWindow.h"
+#include <pyliaison.h>
+#endif
 
 #include <opencv2/opencv.hpp>
 
@@ -340,18 +346,22 @@ bool StarFinder_ImgOffset::HandleImage( img_t img )
 
 #if SH_CAMERA && SH_TELESCOPE
 
+#include "ImageTextureWindow.h"
+
 #include <pyliaison.h>
 #include <SDL.h>
 
 bool StarHunter::Run()
 {
-	SDL_Window * pWindow = nullptr;
 	try
 	{
 #if WIN32
 		// Create SDL window for Windows
-		pWindow = SDL_CreateWindow( "StarHunter", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 400, 400, SDL_WINDOW_OPENGL );
-		if ( !pWindow )
+		m_upTextureWindow.reset( new ImageTextureWindow( "StarHunter",
+														 SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 400, 400,
+														 SDL_WINDOW_SHOWN, 3, 0, true,
+														 "../shaders/shader.vert", "../shaders/shader.vert", 0.7f ) );
+		if ( m_upTextureWindow == nullptr )
 			return false;
 #endif
 		// Init pyliaison
@@ -470,20 +480,11 @@ bool StarHunter::Run()
 			}
 		}
 
-		// Destroy window
-		if ( pWindow )
-			SDL_DestroyWindow( pWindow );
-		pWindow = nullptr;
-
 		// Finalize pyl
 		pyl::finalize();
 	}
 	catch ( std::runtime_error& e )
 	{
-		if ( pWindow )
-			SDL_DestroyWindow( pWindow );
-		pWindow = nullptr;
-
 		pyl::finalize();
 		std::cout << e.what() << std::endl;
 		return false;
@@ -497,6 +498,9 @@ StarHunter::StarHunter( SHCamera * pCamera, TelescopeComm * pTelescopeComm, Star
 	m_upTelescopeComm( pTelescopeComm ),
 	m_upStarFinder( pStarFinder )
 {}
+
+StarHunter::~StarHunter() {}
+
 #endif // SH_CAMERA && SH_TELESCOPE
 
 void displayImage( std::string strWindowName, cv::Mat& img )
