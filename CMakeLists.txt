@@ -6,14 +6,18 @@ SET(CMAKE_CXX_FLAGS "-std=c++14 -Wall")
 
 # If on linux, make sure to use gcc-4.8
 # (cuda can't handle new gcc apparently)
-IF(UNIX AND SH_CUDA AND NOT APPLE)
-    SET(CMAKE_C_COMPILER gcc-4.8)    
-    SET(CMAKE_CXX_COMPILER g++-4.8)
-ENDIF(UNIX AND SH_CUDA AND NOT APPLE)
+IF(UNIX)
+    IF(SH_CUDA AND NOT APPLE)
+        SET(CMAKE_C_COMPILER gcc-4.8)    
+        SET(CMAKE_CXX_COMPILER g++-4.8)
+    ENDIF(SH_CUDA AND NOT APPLE)
+ENDIF(UNIX)
 
-IF(UNIX AND ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
-    SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
-ENDIF(UNIX AND ${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+IF(UNIX)
+    IF(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+        SET(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -g")
+    ENDIF(${CMAKE_BUILD_TYPE} STREQUAL "Debug")
+ENDIF(UNIX)
 
 #CUDA flags
 IF(SH_CUDA)
@@ -58,12 +62,20 @@ IF(WIN32)
         SET(LIBRAW_LIB_DIR $ENV{LIBDIR}/LibRaw/lib/${WIN_PLATFORM})
         SET(LIBRAW_LIB LibRaw.lib)
         
-        # Canon EDSDK (no libgphoto2 on Windows)
         # EDSDK needs a window, so use SDL2 as part of cam lib
         FIND_PACKAGE(SDL2)
+        
+        # Canon EDSDK (no libgphoto2 on Windows)
+        ADD_DEFINITIONS(-DSH_USE_EDSDK=1)
         SET(CAM_INC_DIR $ENV{LIBDIR}/EDSDK/include ${SDL2_INCLUDE_DIR})
         SET(CAM_LIB_DIR $ENV{LIBDIR}/EDSDK/lib/${WIN_PLATFORM})
         SET(CAM_LIB EDSDK.lib ${SDL2_LIBRARY})
+        
+        # We'll use OpenGL and GLEW to display incoming images
+        FIND_PACKAGE(GLEW)
+        FIND_PACKAGE(OpenGL)
+        ADD_DEFINITIONS(-DGLEW_STATIC)
+        SET(GLM $ENV{LIBDIR}/glm)
     ENDIF(${SH_CAMERA})
 ELSE(WIN32)
     # OCV 3.1, handle debug and release
@@ -97,7 +109,9 @@ SET(SH_LIBS
     opencv_highgui
     # Camera libs
     ${LIBRAW_LIB}
-    ${CAM_LIB})
+    ${CAM_LIB}
+    # GLEW if we need it
+    ${OPENGL_LIBRARIES} ${GLEW_LIBRARIES})
 
 # Append CUDA libraries if needed
 IF(SH_CUDA)
@@ -122,18 +136,32 @@ INCLUDE_DIRECTORIES(
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${OCV_INC_DIR}
     ${LIBRAW_INC_DIR}
-    ${CAM_INC_DIR})
+    ${CAM_INC_DIR}
+    ${GLEW_INCLUDE_DIRS}
+    ${GLM})
 
-# Get cpp and header files
-FILE(GLOB SOURCE
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h)
+# cpp and header files
+FILE(GLOB SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cpp)
+FILE(GLOB HEADERS ${CMAKE_CURRENT_SOURCE_DIR}/include/*.h)
+
+# Create source groups
+SOURCE_GROUP("Source" FILES ${SOURCES})
+SOURCE_GROUP("Include" FILES ${HEADERS})
+
+# Make a macro for all input dependencies
+SET(SH_INPUT ${SOURCES} ${HEADERS})
+
+IF(SH_CAMERA AND WIN32)
+    FILE(GLOB SHADERS ${CMAKE_CURRENT_SOURCE_DIR}/shaders/*)
+    SOURCE_GROUP("Shaders" FILES ${SHADERS})
+    SET(SH_INPUT ${SH_INPUT} ${SHADERS})
+ENDIF(SH_CAMERA AND WIN32)
 
 # Append source files (add .cu for cuda)
 IF(SH_CUDA)
-    FILE(GLOB SOURCE ${SOURCE}
-    ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cu
-    ${CMAKE_CURRENT_SOURCE_DIR}/include/*.cuh)
+    FILE(GLOB KERNELS ${CMAKE_CURRENT_SOURCE_DIR}/src/*.cu ${CMAKE_CURRENT_SOURCE_DIR}/include/*.cuh)
+    SOURCE_GROUP("Kernels" FILES ${KERNELS})
+    SET(SH_INPUT ${SH_INPUT} ${KERNELS})
 ENDIF(SH_CUDA)
 
 # If building with telescope control,
@@ -141,8 +169,6 @@ ENDIF(SH_CUDA)
 IF(SH_TELESCOPE)
     # Add subdir
     add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/pyl)
-    # Add scripts to source
-    FILE(GLOB SOURCE ${SOURCE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/*)
     # include python and pyl
     INCLUDE_DIRECTORIES(
         ${CMAKE_CURRENT_SOURCE_DIR}/pyl
@@ -150,15 +176,19 @@ IF(SH_TELESCOPE)
     # link against python
     LINK_DIRECTORIES(${PYTHON_LIB_DIR})
     SET(SH_LIBS ${SH_LIBS} PyLiaison ${PYTHON_LIBRARY})
+    # Add scripts to source
+    FILE(GLOB SCRIPTS ${CMAKE_CURRENT_SOURCE_DIR}/scripts/*.py)
+    SOURCE_GROUP("Scripts" FILES ${SCRIPTS})
+    SET(SH_INPUT ${SH_INPUT} ${SCRIPTS})
     # Add definition
     ADD_DEFINITIONS(-DSH_TELESCOPE=1)
 ENDIF(SH_TELESCOPE)
 
 # Add regular or cuda executable
 IF(SH_CUDA)
-    CUDA_ADD_EXECUTABLE(StarHunter ${SOURCE})
+    CUDA_ADD_EXECUTABLE(StarHunter ${SH_INPUT})
 ELSE(SH_CUDA)
-    ADD_EXECUTABLE(StarHunter ${SOURCE})
+    ADD_EXECUTABLE(StarHunter ${SH_INPUT})
 ENDIF(SH_CUDA)
 
 # Link libraries with executable

@@ -13,7 +13,11 @@ struct _TelescopeComm_impl
     pyl::Object obTelescope;
 };
 
-TelescopeComm::TelescopeComm(std::string strDevice)
+TelescopeComm::TelescopeComm( std::string strDevice ) :
+	m_strDeviceName( strDevice )
+{}
+
+void TelescopeComm::Initialize()
 {
     try
     {
@@ -24,10 +28,10 @@ TelescopeComm::TelescopeComm(std::string strDevice)
         // factory function, store in impl member
         m_pImpl.reset(new _TelescopeComm_impl);
         m_pImpl->obTelescope = obTelMod.call(
-                "TelescopeComm.Factory", strDevice);
+                "FactoryFunc", m_strDeviceName );
     }
     // An error will be thrown if something went wrong
-    catch (pyl::runtime_error e)
+	catch ( pyl::runtime_error e )
     {
         // Print error, close interpreter
         std::cout << e.what() << std::endl;

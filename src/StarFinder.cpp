@@ -339,10 +339,22 @@ bool StarFinder_ImgOffset::HandleImage( img_t img )
 }
 
 #if SH_CAMERA && SH_TELESCOPE
+
+#include <pyliaison.h>
+#include <SDL.h>
+
 bool StarHunter::Run()
 {
+	SDL_Window * pWindow = nullptr;
 	try
 	{
+#if WIN32
+		// Create SDL window for Windows
+		pWindow = SDL_CreateWindow( "StarHunter", SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 400, 400, SDL_WINDOW_OPENGL );
+		if ( !pWindow )
+			return false;
+#endif
+		// Init pyliaison
 		pyl::initialize();
 
 		// Detect, then calibrate, then track, then get out
@@ -354,12 +366,27 @@ bool StarHunter::Run()
 			int nSlewRateX( 0 ), nSlewRateY( 0 );
 			ImageSource::Status eImgStat = ImageSource::Status::READY;
 
+			// Pump input, allow exit
+			SDL_Event e { 0 };
+			while ( SDL_PollEvent( &e ) )
+			{
+				if ( e.type == SDL_KEYUP && e.key.keysym.sym == SDLK_ESCAPE )
+					m_eState = State::DONE;
+			}
+
 			switch ( m_eState )
 			{
+
 				// Initially set camera mode to streaming, set state to detect, and break
 				case State::NONE:
-					m_upCamera->Initialize();
+					// Init camera and set to stream
+					m_upCamera->Initialize();	
 					m_upCamera->SetMode( SHCamera::Mode::Streaming );
+
+					// Init telescope comm
+					m_upTelescopeComm->Initialize();
+
+					// We're detecting
 					m_eState = State::DETECT;
 					break;
 
@@ -416,9 +443,9 @@ bool StarHunter::Run()
 #if SH_TELESCOPE
 						// Otherwise compute increments (1 in the direction of drift)
 						m_upTelescopeComm->GetSlewRate( &nSlewRateX, &nSlewRateY );
-						if ( bX )
+						if ( !bX )
 							nSlewRateX += fDriftX > 0 ? 1 : -1;
-						if ( bY )
+						if ( !bY )
 							nSlewRateY += fDriftY > 0 ? 1 : -1;
 
 						// Set slew rate
@@ -437,13 +464,27 @@ bool StarHunter::Run()
 						m_upCamera->SetMode( SHCamera::Mode::Off );
 					}
 					break;
+				case State::DONE:
+					m_upCamera->Finalize();
+					break;
 			}
 		}
 
+		// Destroy window
+		if ( pWindow )
+			SDL_DestroyWindow( pWindow );
+		pWindow = nullptr;
+
+		// Finalize pyl
 		pyl::finalize();
 	}
 	catch ( std::runtime_error& e )
 	{
+		if ( pWindow )
+			SDL_DestroyWindow( pWindow );
+		pWindow = nullptr;
+
+		pyl::finalize();
 		std::cout << e.what() << std::endl;
 		return false;
 	}

@@ -38,6 +38,12 @@ class TelescopeComm:
 
     # Slew at a variable rate (nSpeed in arcseconds)
     def slewVariable(self, strID, nSpeed):
+        # need python unicode string
+        if not(isinstance(strID, str)):
+            if isinstance(strID, bytes):
+                strID = strID.decode('utf-8')
+            else:
+                raise RuntimeError('Error: Invalid slew direction!')
         # Command needs high precision and low precision separate
         trackRateHigh = int(4 * abs(nSpeed)) >> 8
         trackRateLow = int(4 * abs(nSpeed)) % 256
@@ -54,6 +60,13 @@ class TelescopeComm:
     # sends a slew command to the mount
     # strID should be Alt or Azm, nSpeed is a signed int
     def slewFixed(self, strID, nSpeed):
+        # need python unicode string
+        if not(isinstance(strID, str)):
+            if isinstance(strID, bytes):
+                strID = strID.decode('utf-8')
+            else:
+                raise RuntimeError('Error: Invalid slew direction!')
+
         # Positive / Negative altitude / azimuth
         cmdDict = {
             'Alt+' : [2, 17, 36, abs(nSpeed)],
@@ -127,6 +140,7 @@ class TelescopeComm:
         # Return the response
         return bytearray(ord(b) for b in bufResp)
 
-    # class method
-    def FactoryFunc(strDevice):
-        return TelescopeComm(strDevice)
+# factory method -  I wanted it to be a
+# class static method, but pyl couldn't find it...
+def FactoryFunc(strDevice):
+    return TelescopeComm(strDevice)
