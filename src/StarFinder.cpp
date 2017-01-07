@@ -350,7 +350,7 @@ bool StarHunter::Run()
 {
 	try
 	{
-#if WIN32
+#if SH_USE_EDSDK
 		// Create SDL window for Windows
 		m_upTextureWindow.reset( new ImageTextureWindow( "StarHunter",
 														 SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 400, 400,
@@ -372,16 +372,17 @@ bool StarHunter::Run()
 			ImageSource::Status eImgStat = ImageSource::Status::READY;
 
 			// Pump input, allow exit
+#if SH_USE_ESDK
 			SDL_Event e { 0 };
 			while ( SDL_PollEvent( &e ) )
 			{
 				if ( e.type == SDL_KEYUP && e.key.keysym.sym == SDLK_ESCAPE )
 					m_eState = State::DONE;
 			}
+#endif
 
 			switch ( m_eState )
 			{
-
 				// Initially set camera mode to streaming, set state to detect, and break
 				case State::NONE:
 					// Init camera and set to stream
@@ -473,6 +474,12 @@ bool StarHunter::Run()
 					m_upCamera->Finalize();
 					break;
 			}
+
+#if SH_USE_EDSDK
+			// Display the image if we have one
+			if ( img.empty() == false )
+				m_upTextureWindow->SetImage( img );
+#endif
 		}
 
 		// Finalize pyl
