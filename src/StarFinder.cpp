@@ -243,26 +243,26 @@ bool StarFinder_Drift::HandleImage( img_t img )
 			bool bMatchFound = false;
 			for ( const Circle cNew : vStarLocations )
 			{
+				// We've come full circle...
+				if ( bMatchFound )
+					break;
+
 				// Compute the drift between old and new
 				float fDistX = cNew.fX - cOld.fX;
 				float fDistY = cNew.fY - cOld.fY;
 				float fDist2 = pow( fDistX, 2 ) + pow( fDistY, 2 );
 				if ( fDist2 < pow( cOld.fR + cNew.fR, 2 ) )
 				{
-					// For now I'd like to ensure that we don't have duplicate matches
-					if ( bMatchFound )
-						throw std::runtime_error( "Error: Why were there two matches?" );
-					bMatchFound = true;
-
 					// Divide this drift by the # of stars we have to average
 					fDriftAvgX += fDistX / float( m_vLastCircles.size() );
 					fDriftAvgY += fDistY / float( m_vLastCircles.size() );
+					bMatchFound = true;
 				}
 			}
 		}
 
 		// Update cached positions, inc cumulative drift counter
-		m_vLastCircles = std::move( vStarLocations );
+		m_vLastCircles = vStarLocations;
 		m_fDriftX_Prev = fDriftAvgX;
 		m_fDriftY_Prev = fDriftAvgY;
 		m_fDriftX_Cumulative += fDriftAvgX;
@@ -362,8 +362,8 @@ bool StarHunter::Run()
 		// Init pyliaison
 		pyl::initialize();
 
-		// Declare slew cmd counter
-		int nImagesTillSlewCMD = 0;
+		// Declare slew cmd counter (set to limit 
+		int nImagesTillSlewCMD( m_nImagesPerSlewCMD );
 
 		// Detect, then calibrate, then track, then get out
 		for ( m_eState = State::NONE; m_eState != State::DONE;)
@@ -432,16 +432,17 @@ bool StarHunter::Run()
 					else
 						break;
 
-					// Get the current drift value (this shouldn't return false...)
-					if ( m_upStarFinder->GetDrift_Cumulative( &fDriftX, &fDriftY ) )
+					// Get the most recent drift value (this shouldn't return false...)
+					if ( m_upStarFinder->GetDrift_Prev( &fDriftX, &fDriftY ) )
 					{
 						std::cout << "Calibrating with drift value of " << fDriftX << ", " << fDriftX << std::endl;
 
-						bool bX = fabs( fDriftX ) < kEPS;
-						bool bY = fabs( fDriftY ) < kEPS;
+						// Are we drifting up/down?
+						bool bStableX = fabs( fDriftX ) < kEPS;
+						bool bStableY = fabs( fDriftY ) < kEPS;
 
 						// If these are both below the threshold, set state to track
-						if ( bX && bY )
+						if ( bStableX && bStableY )
 						{
 							std::cout << "Calibration complete! Stars are now being tracked" << std::endl;
 							m_eState = State::TRACK;
@@ -451,20 +452,23 @@ bool StarHunter::Run()
 
 #if SH_TELESCOPE
 						// Increment the slew CMD counter, send a command if we've hit it
-						if ( ++nImagesTillSlewCMD % m_nImagesPerSlewCMD == 0 )
+						if ( nImagesTillSlewCMD++ % m_nImagesPerSlewCMD == 0 )
 						{
-							// Otherwise compute increments (1 in the direction of drift)
+							std::cout << "Sending slew rate command to mount: " << nSlewRateX << ", " << nSlewRateY << std::endl;
+
+							// Add 1 in the direction of drift
 							m_upTelescopeComm->GetSlewRate( &nSlewRateX, &nSlewRateY );
-							if ( !bX )
+							if ( !bStableX )
 								nSlewRateX += fDriftX > 0 ? 1 : -1;
-							if ( !bY )
+							if ( !bStableY )
 								nSlewRateY += fDriftY > 0 ? 1 : -1;
 
+							// Reset counter
 							nImagesTillSlewCMD = 0;
-						}
 
-						// Set slew rate
-						m_upTelescopeComm->SetSlewRate( nSlewRateX, nSlewRateY );
+							// Set slew rate (noop if no difference)
+							m_upTelescopeComm->SetSlewRate( nSlewRateX, nSlewRateY );
+						}
 #endif
 					}
 					break;
