@@ -355,7 +355,7 @@ bool StarHunter::Run()
 		m_upTextureWindow.reset( new ImageTextureWindow( "StarHunter",
 														 SDL_WINDOWPOS_UNDEFINED, SDL_WINDOWPOS_UNDEFINED, 400, 400,
 														 SDL_WINDOW_SHOWN, 3, 0, true,
-														 "../shaders/shader.vert", "../shaders/shader.vert", 0.7f ) );
+														 "../shaders/shader.vert", "../shaders/shader.frag", 0.7f ) );
 		if ( m_upTextureWindow == nullptr )
 			return false;
 #endif
@@ -488,6 +488,7 @@ bool StarHunter::Run()
 			// Display the image if we have one
 			if ( img.empty() == false )
 				m_upTextureWindow->SetImage( img );
+			m_upTextureWindow->Draw();
 #endif
 		}
 

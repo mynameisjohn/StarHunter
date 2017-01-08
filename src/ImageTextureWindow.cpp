@@ -78,7 +78,7 @@ bool ImageTextureWindow::SetImage( img_t img )
 		glBindTexture( GL_TEXTURE_2D, uTexID );
 
 		// Upload host texture to device (single channel float)
-		glTexImage2D( GL_TEXTURE_2D, 0, GL_RED, m_nImgHeight, m_nImgHeight, 0, GL_RED, GL_FLOAT, img.ptr() );
+		glTexImage2D( GL_TEXTURE_2D, 0, GL_RED, m_nImgWidth, m_nImgHeight, 0, GL_RED, GL_FLOAT, img.ptr() );
 
 		// Set filtering   
 		glTexParameteri( GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR );
@@ -101,7 +101,7 @@ bool ImageTextureWindow::SetImage( img_t img )
 	}
 
 	// Upload image (single channel float)
-	glTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, m_nImgHeight, m_nImgHeight, GL_RED, GL_FLOAT, img.ptr() );
+	glTexSubImage2D( GL_TEXTURE_2D, 0, 0, 0, m_nImgWidth, m_nImgHeight, GL_RED, GL_FLOAT, img.ptr() );
 	glBindTexture( GL_TEXTURE_2D, 0 );
 
 	// Unbind (?)

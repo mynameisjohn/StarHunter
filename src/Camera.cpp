@@ -487,7 +487,7 @@ bool SHCamera::handleEvfImage()
 	{
 		// Cache the current mode here
 		SHCamera::Mode appMode = GetMode();
-		size_t nImages( 10 );
+		size_t nImages( 1 );
 
 		// Get image data/size
 		void * pData( nullptr );
